@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"shelley.exe.dev/claudetool"
+	"shelley.exe.dev/db"
 	"shelley.exe.dev/db/generated"
 	"shelley.exe.dev/llm"
 )
@@ -194,32 +197,7 @@ func (r *SubagentRunner) isAgentWorking(ctx context.Context, conversationID stri
 }
 
 func (r *SubagentRunner) getLastAssistantResponse(ctx context.Context, conversationID string) (string, error) {
-	s := r.server
-
-	// Get the latest message
-	msg, err := s.db.GetLatestMessage(ctx, conversationID)
-	if err != nil {
-		return "", fmt.Errorf("failed to get latest message: %w", err)
-	}
-
-	// Extract text content
-	if msg.LlmData == nil {
-		return "", nil
-	}
-
-	var llmMsg llm.Message
-	if err := json.Unmarshal([]byte(*msg.LlmData), &llmMsg); err != nil {
-		return "", fmt.Errorf("failed to parse message: %w", err)
-	}
-
-	var texts []string
-	for _, content := range llmMsg.Content {
-		if content.Type == llm.ContentTypeText && content.Text != "" {
-			texts = append(texts, content.Text)
-		}
-	}
-
-	return strings.Join(texts, "\n"), nil
+	return r.server.lastAgentText(ctx, conversationID)
 }
 
 // generateProgressSummary makes a non-conversation LLM call to summarize the subagent's progress.
@@ -402,6 +380,249 @@ func (r *SubagentRunner) notifySubagentConversation(ctx context.Context, convers
 		"conversationID", conversationID,
 		"parentID", *conv.ParentConversationID,
 		"slug", conv.Slug)
+}
+
+// notifyParentSubagentDone enqueues a synthetic tool_use/tool_result pair
+// onto the parent conversation's pending-batch queue when a subagent
+// finishes, so the parent agent knows to check the results. Inspired by
+// boldsoftware/shelley#200.
+//
+// All scheduling — wait for the current turn to end, wait for distillation
+// setup to complete, cooperate with user-typed messages — is handled by the
+// same drainPendingMessages path that user messages already use. We just
+// drop a batch onto the queue and trust that machinery.
+//
+// The one case we filter out here is wait=true: if the parent is currently
+// blocked inside a subagent tool call targeting this exact subagent, the
+// tool's own return value will convey the response and our synthetic pair
+// would duplicate it.
+func (s *Server) notifyParentSubagentDone(subagentConversationID string) {
+	ctx := context.Background()
+
+	var conv generated.Conversation
+	err := s.db.Queries(ctx, func(q *generated.Queries) error {
+		var err error
+		conv, err = q.GetConversation(ctx, subagentConversationID)
+		return err
+	})
+	if err != nil || conv.ParentConversationID == nil {
+		return
+	}
+
+	parentID := *conv.ParentConversationID
+	slug := "unknown"
+	if conv.Slug != nil {
+		slug = *conv.Slug
+	}
+
+	s.mu.Lock()
+	parentManager, ok := s.activeConversations[parentID]
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+
+	// Suppress notification when the parent is currently inside a
+	// wait=true subagent tool call targeting THIS subagent. In that case
+	// the tool's return value will convey the response; our synthetic pair
+	// would duplicate it. This is the only case we drop: distillation and
+	// busy-with-other-work are now handled by the queue, not suppression.
+	if s.parentHasPendingSubagentToolCall(ctx, parentID, subagentConversationID) {
+		return
+	}
+
+	parentManager.mu.Lock()
+	parentModelID := parentManager.modelID
+	parentManager.mu.Unlock()
+
+	response, err := s.lastAgentText(ctx, subagentConversationID)
+	if err != nil || response == "" {
+		response = "(no textual response)"
+	}
+	// Cap the subagent text we splice into the parent's history. A runaway
+	// subagent reply shouldn't dominate the parent's context window; the
+	// parent can always read the full subagent conversation via the
+	// dedicated subagent view.
+	if len(response) > 500 {
+		response = response[:500] + "..."
+	}
+
+	// Splice in a synthetic tool_use/tool_result pair as if the parent had
+	// just called the subagent tool with wait=true. This gives the LLM the
+	// information it needs in the tool_result channel (weaker prompt
+	// authority than user-voice), avoids the extra round trip that a
+	// "please call the subagent tool" nudge would require, and the result
+	// is clearly attributed to the subagent.
+	toolUseID := fmt.Sprintf("sa_done_%s", uuid.New().String())
+	toolInput, _ := json.Marshal(map[string]any{
+		"slug":   slug,
+		"prompt": "(asynchronous completion notification)",
+		"wait":   true,
+	})
+	assistantMsg := llm.Message{
+		Role: llm.MessageRoleAssistant,
+		Content: []llm.Content{{
+			Type:      llm.ContentTypeToolUse,
+			ID:        toolUseID,
+			ToolName:  "subagent",
+			ToolInput: toolInput,
+			Display: claudetool.SubagentDisplayData{
+				Slug:           slug,
+				ConversationID: subagentConversationID,
+			},
+		}},
+	}
+	toolResultMsg := llm.Message{
+		Role: llm.MessageRoleUser,
+		Content: []llm.Content{{
+			Type:      llm.ContentTypeToolResult,
+			ToolUseID: toolUseID,
+			ToolResult: []llm.Content{{
+				Type: llm.ContentTypeText,
+				Text: fmt.Sprintf(
+					"[Subagent %q has finished asynchronously. "+
+						"This tool call was synthesized by the system to surface the "+
+						"result; you did not invoke it yourself. Please briefly acknowledge "+
+						"the subagent's outcome to the user and decide whether any follow-up "+
+						"work is needed.]\n\nSubagent response:\n%s",
+					slug, response,
+				),
+			}},
+			Display: claudetool.SubagentDisplayData{
+				Slug:           slug,
+				ConversationID: subagentConversationID,
+			},
+		}},
+	}
+
+	modelID := parentModelID
+	if modelID == "" {
+		modelID = s.defaultModel
+	}
+
+	// Enqueue onto the parent's pending-batch queue. drainPendingMessages
+	// handles persistence, loop start/wake, and serialization with both
+	// distillation and other queued work. We don't need to read or touch
+	// the parent's agentWorking/distilling/loop state ourselves — the queue
+	// is the single point of coordination.
+	parentManager.EnqueueSubagentDone(s, modelID, assistantMsg, toolResultMsg)
+	s.logger.Info("Queued subagent-done notification for parent", "subagent", slug, "parent", parentID)
+}
+
+// parentHasPendingSubagentToolCall reports whether the parent's most recent
+// assistant message contains a subagent tool_use whose slug matches the
+// just-finished subagent and whose matching tool_result hasn't been
+// recorded yet. That's the wait=true in-flight tool-call case.
+//
+// We match on slug alone (not conversation ID) because the subagent tool
+// enforces slug uniqueness within a parent conversation (see
+// claudetool/subagent.go: "failed to create unique subagent slug"), so a
+// slug uniquely identifies a subagent within its parent.
+func (s *Server) parentHasPendingSubagentToolCall(ctx context.Context, parentID, subagentConversationID string) bool {
+	var conv generated.Conversation
+	if err := s.db.Queries(ctx, func(q *generated.Queries) error {
+		var err error
+		conv, err = q.GetConversation(ctx, subagentConversationID)
+		return err
+	}); err != nil || conv.Slug == nil {
+		return false
+	}
+	targetSlug := *conv.Slug
+
+	var msgs []generated.Message
+	if err := s.db.Queries(ctx, func(q *generated.Queries) error {
+		var err error
+		msgs, err = q.ListMessagesForContext(ctx, parentID)
+		return err
+	}); err != nil {
+		return false
+	}
+
+	// Walk backwards to find the most recent message with a subagent tool_use
+	// for this slug; then check whether a subsequent tool_result exists.
+	pendingIDs := map[string]bool{}
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+		if m.LlmData == nil {
+			continue
+		}
+		var lm llm.Message
+		if err := json.Unmarshal([]byte(*m.LlmData), &lm); err != nil {
+			continue
+		}
+		for _, c := range lm.Content {
+			if c.Type != llm.ContentTypeToolUse || c.ToolName != "subagent" {
+				continue
+			}
+			var input struct {
+				Slug string `json:"slug"`
+			}
+			if err := json.Unmarshal(c.ToolInput, &input); err != nil || input.Slug != targetSlug {
+				continue
+			}
+			pendingIDs[c.ID] = true
+		}
+		if len(pendingIDs) > 0 {
+			// Now scan forward from i+1 to see if any of these have results.
+			for j := i + 1; j < len(msgs); j++ {
+				if msgs[j].LlmData == nil {
+					continue
+				}
+				var rm llm.Message
+				if err := json.Unmarshal([]byte(*msgs[j].LlmData), &rm); err != nil {
+					continue
+				}
+				for _, c := range rm.Content {
+					if c.Type == llm.ContentTypeToolResult {
+						delete(pendingIDs, c.ToolUseID)
+					}
+				}
+			}
+			return len(pendingIDs) > 0
+		}
+	}
+	return false
+}
+
+// lastAgentText returns the concatenated text content of the most recent
+// type=agent message in a conversation — specifically the latest such
+// message, skipping non-agent rows (gitinfo, user, tool, system, error)
+// that may have been appended after it.
+//
+// In particular gitinfo messages carry assistant-role llm_data and would
+// otherwise be returned as "the subagent's response" when they're really
+// user-visible git state notes Shelley itself injected.
+//
+// If the latest agent message has no text content (e.g. it's a pure
+// tool_use), returns "" — we don't walk further back, because earlier
+// agent turns are stale: their text was already conveyed via prior
+// notifications or tool returns.
+func (s *Server) lastAgentText(ctx context.Context, conversationID string) (string, error) {
+	msgs, err := s.db.ListMessages(ctx, conversationID)
+	if err != nil {
+		return "", err
+	}
+	for i := len(msgs) - 1; i >= 0; i-- {
+		m := msgs[i]
+		if m.Type != string(db.MessageTypeAgent) {
+			continue
+		}
+		if m.LlmData == nil {
+			return "", nil
+		}
+		var llmMsg llm.Message
+		if err := json.Unmarshal([]byte(*m.LlmData), &llmMsg); err != nil {
+			return "", err
+		}
+		var texts []string
+		for _, content := range llmMsg.Content {
+			if content.Type == llm.ContentTypeText && content.Text != "" {
+				texts = append(texts, content.Text)
+			}
+		}
+		return strings.Join(texts, "\n"), nil
+	}
+	return "", nil
 }
 
 // Ensure SubagentRunner implements claudetool.SubagentRunner.

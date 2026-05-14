@@ -881,6 +881,11 @@ func (s *Server) getOrCreateSubagentConversationManager(ctx context.Context, con
 		subagentConfig.SubagentDepth = s.toolSetConfig.SubagentDepth + 1
 
 		manager := NewConversationManager(conversationID, s.db, s.logger, subagentConfig, recordMessage, onStateChange, s.streamPub)
+		// Wire up done notification: when this subagent finishes, notify the parent
+		// by injecting a user message into the parent's loop so the LLM sees it.
+		manager.onDone = func() {
+			go s.notifyParentSubagentDone(conversationID)
+		}
 		// See getOrCreateConversationManager for why we don't hold s.mu here.
 		if err := manager.Hydrate(ctx); err != nil {
 			return nil, err

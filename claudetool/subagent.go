@@ -110,11 +110,11 @@ func (s *SubagentTool) subagentInputSchema() string {
     },
     "timeout_seconds": {
       "type": "integer",
-      "description": "How long to wait for a response (default: 60, max: 300)"
+      "description": "How long to wait for a synchronous response, in seconds (default: 60, max: 300). Only applies when wait=true; ignored otherwise. If the subagent hasn't finished by this deadline, the tool returns a progress summary and the subagent keeps running in the background; its eventual completion will then be delivered asynchronously."
     },
     "wait": {
       "type": "boolean",
-      "description": "Whether to wait for completion (default: true). If false, returns immediately."
+      "description": "Whether to wait for completion (default: true). If false, returns immediately; when the subagent eventually finishes, its response is delivered to you asynchronously as a follow-up tool_result on this same tool call, so you'll see it without polling."
     }%s
   }
 }`, modelProp)

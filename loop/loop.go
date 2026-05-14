@@ -107,9 +107,20 @@ func NewLoop(config Config) *Loop {
 
 // QueueUserMessage adds a user message to the queue to be processed
 func (l *Loop) QueueUserMessage(message llm.Message) {
+	l.QueueMessages(message)
+}
+
+// QueueMessages atomically appends one or more messages to the loop's queue
+// in order, then wakes the loop. The messages can be of any role; this is
+// useful for splicing in a synthetic tool_use / tool_result pair that must
+// be appended together so the LLM sees a coherent history.
+func (l *Loop) QueueMessages(messages ...llm.Message) {
+	if len(messages) == 0 {
+		return
+	}
 	l.mu.Lock()
-	l.messageQueue = append(l.messageQueue, message)
-	l.logger.Debug("queued user message", "content_count", len(message.Content))
+	l.messageQueue = append(l.messageQueue, messages...)
+	l.logger.Debug("queued messages", "count", len(messages))
 	l.mu.Unlock()
 	// Wake the run loop immediately.
 	select {
