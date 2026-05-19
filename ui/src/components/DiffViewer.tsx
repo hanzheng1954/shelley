@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
 import { api } from "../services/api";
 import { loadMonaco } from "../services/monaco";
@@ -8,6 +8,7 @@ import VimToggle from "./VimToggle";
 import { GitDiffInfo, GitFileInfo, GitFileDiff, GitCommitMessage } from "../types";
 import DirectoryPickerModal from "./DirectoryPickerModal";
 import CommitPicker, { RangeToggle } from "./CommitPicker";
+import DiffFileTree, { DiffFileTreeEntry } from "./DiffFileTree";
 
 interface DiffViewerProps {
   cwd: string;
@@ -638,13 +639,29 @@ function DiffViewer({
         }
       }
 
-      // Auto-select working changes if non-empty
+      // Default selection: the first commit above merge-base with
+      // @{upstream}, with the range running through the working tree.
+      // That's the "my branch's changes (so far)" view, which is by far
+      // the most useful starting point. We fall back to working changes
+      // when there's no merge-base info (detached HEAD, no upstream).
       if (response.diffs.length > 0) {
         const working = response.diffs.find((d) => d.id === "working");
-        if (working && working.filesCount > 0) {
+        const commitsOnly = response.diffs.filter((d) => d.id !== "working");
+        const mbIdx = commitsOnly.findIndex((d) => d.isMergeBase);
+        let topOfBranch: GitDiffInfo | undefined;
+        if (mbIdx > 0) {
+          // commitsOnly is newest-first; commitsOnly[mbIdx - 1] is the
+          // commit one step newer than the merge-base on the branch.
+          topOfBranch = commitsOnly[mbIdx - 1];
+        }
+        if (topOfBranch) {
+          setSelectedDiff(topOfBranch.id);
+          setSelectedTo("working");
+        } else if (working && working.filesCount > 0) {
           setSelectedDiff("working");
-        } else if (response.diffs.length > 1) {
-          setSelectedDiff(response.diffs[1].id);
+        } else if (commitsOnly.length > 0) {
+          setSelectedDiff(commitsOnly[0].id);
+          setSelectedTo("self");
         }
       }
     } catch (err) {
@@ -1086,6 +1103,71 @@ function DiffViewer({
     isMobile,
   ]);
 
+  // Sidebar tree input. Computed here — *above* the early `!isOpen`
+  // return — so the hook order stays stable across renders. Commit
+  // messages get slotted under a synthetic "Commit messages" folder;
+  // the short hash (and a HEAD marker) live in the right-aligned
+  // decoration lane so the subject — not the hash — is what gets
+  // truncated when space is tight.
+  const treeEntries = useMemo<DiffFileTreeEntry[]>(() => {
+    // Index commit messages by hash once so the per-file pass stays
+    // linear instead of O(N·M).
+    const msgByHash = new Map(commitMessages.map((m) => [m.hash, m]));
+    // First pass: figure out which (sanitized) subjects collide so we
+    // know which leaves need a hash suffix to stay distinct.
+    const subjectCounts = new Map<string, number>();
+    for (const f of files) {
+      if (!isCommitMessageFile(f.path)) continue;
+      const hash = commitHashFromPath(f.path);
+      const msg = msgByHash.get(hash);
+      const subject = msg ? msg.subject : hash.slice(0, 8);
+      subjectCounts.set(subject, (subjectCounts.get(subject) ?? 0) + 1);
+    }
+    return files.map((f) => {
+      if (isCommitMessageFile(f.path)) {
+        const hash = commitHashFromPath(f.path);
+        const msg = msgByHash.get(hash);
+        const subject = msg ? msg.subject : hash.slice(0, 8);
+        const shortHash = hash.slice(0, 8);
+        // `treePath` is segmented, so `/` in the subject stays inside
+        // the leaf label — no FRACTION-SLASH substitution needed (which
+        // used to fall back to a different system font and look weird).
+        const collides = (subjectCounts.get(subject) ?? 0) > 1;
+        const leaf = collides ? `${subject} (${shortHash})` : subject;
+        return {
+          realPath: f.path,
+          treePath: ["Commit messages", leaf],
+          decoration: msg?.isHead ? "HEAD" : undefined,
+          decorationTitle: msg?.isHead ? `${hash} (HEAD)` : undefined,
+        };
+      }
+      return {
+        realPath: f.path,
+        treePath: f.path.split("/"),
+        status: f.status,
+      };
+    });
+  }, [files, commitMessages]);
+
+  // Title shown in the desktop sidebar layout's header: the open
+  // file's path, or a commit-message subject (with HEAD suffix) when
+  // viewing a synthetic commit-message row. Falls back to a non-
+  // breaking space so the header height stays constant.
+  let currentTitleText: string | null = null;
+  let currentTitleTooltip: string | null = null;
+  if (selectedFile) {
+    if (isCommitMessageFile(selectedFile)) {
+      const hash = commitHashFromPath(selectedFile);
+      const msg = commitMessages.find((m) => m.hash === hash);
+      const subject = msg ? msg.subject : hash.slice(0, 8);
+      currentTitleText = msg?.isHead ? `${subject} — HEAD` : subject;
+      currentTitleTooltip = msg?.isHead ? `${hash} (HEAD)\n\n${subject}` : `${hash}\n\n${subject}`;
+    } else {
+      currentTitleText = selectedFile;
+      currentTitleTooltip = selectedFile;
+    }
+  }
+
   if (!isOpen) return null;
 
   const getStatusSymbol = (status: string) => {
@@ -1221,63 +1303,26 @@ function DiffViewer({
     </ul>
   );
 
-  // Sidebar file list: a clickable column equivalent of the file selector
-  // <select>. Only used in desktop sidebar layout.
+  // Sidebar file list: a simple in-house file tree that mixes real
+  // files with commit-message rows. Commit-message paths are synthetic
+  // ("commit-message:<hash>") and don't belong in the filesystem
+  // layout, so we slot them under a synthetic "Commit messages"
+  // directory in the tree while keeping the rest of the codebase
+  // working with the real paths via DiffFileTreeEntry's realPath /
+  // treePath mapping.
   const fileList = (
-    <ul className="diff-viewer-file-list" role="listbox" aria-label="Files">
-      {files.length === 0 && <li className="diff-viewer-file-list-empty">No files</li>}
-      {files.map((file) => {
-        const isSelected = file.path === selectedFile;
-        if (isCommitMessageFile(file.path)) {
-          const hash = commitHashFromPath(file.path);
-          const msg = commitMessages.find((m) => m.hash === hash);
-          const subject = msg ? msg.subject : hash.slice(0, 8);
-          return (
-            <li key={file.path}>
-              <button
-                type="button"
-                className={`diff-viewer-file-list-item commit-message${isSelected ? " active" : ""}`}
-                onClick={() => setSelectedFile(file.path)}
-                title={subject + (msg?.isHead ? " [HEAD]" : "")}
-                role="option"
-                aria-selected={isSelected}
-              >
-                <span className="diff-viewer-file-list-icon">📝</span>
-                <span className="diff-viewer-file-list-name">
-                  {subject}
-                  {msg?.isHead ? " [HEAD]" : ""}
-                </span>
-              </button>
-            </li>
-          );
-        }
-        return (
-          <li key={file.path}>
-            <button
-              type="button"
-              className={`diff-viewer-file-list-item${isSelected ? " active" : ""}`}
-              onClick={() => setSelectedFile(file.path)}
-              title={file.path}
-              role="option"
-              aria-selected={isSelected}
-            >
-              <span
-                className={`diff-viewer-file-list-status status-${file.status}`}
-                aria-hidden="true"
-              >
-                {getStatusSymbol(file.status)}
-              </span>
-              <span className="diff-viewer-file-list-name">{file.path}</span>
-              <span className="diff-viewer-file-list-stats">
-                {file.additions > 0 && <span className="add">+{file.additions}</span>}
-                {file.deletions > 0 && <span className="del">-{file.deletions}</span>}
-                {file.isGenerated && <span className="gen">[gen]</span>}
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="diff-viewer-file-list" aria-label="Files">
+      {files.length === 0 && <div className="diff-viewer-file-list-empty">No files</div>}
+      {files.length > 0 && (
+        <div className="diff-viewer-file-tree-wrap">
+          <DiffFileTree
+            entries={treeEntries}
+            selectedRealPath={selectedFile}
+            onSelect={(path) => setSelectedFile(path)}
+          />
+        </div>
+      )}
+    </div>
   );
 
   // Chevron-double sidebar toggle. In header mode (no sidebar) we show
@@ -1500,7 +1545,9 @@ function DiffViewer({
                   </div>
                 </div>
               ) : (
-                <div className="diff-viewer-selectors-row" />
+                <div className="diff-viewer-header-title" title={currentTitleTooltip ?? undefined}>
+                  {currentTitleText ?? "\u00a0"}
+                </div>
               )}
               <div className="diff-viewer-controls-row">
                 {navButtons}

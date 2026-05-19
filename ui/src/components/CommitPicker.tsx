@@ -54,34 +54,38 @@ export function RangeToggle({
   onChange: (selectedDiff: string, selectedTo: "working" | "self") => void;
 }) {
   const disabled = selectedDiff === null || selectedDiff === "working";
+  // Render the two options as side-by-side "cards" so the choice between
+  // them reads as a clear A/B at a glance: each tile shows a short label,
+  // a one-line explanation, and an ASCII range hint. The selected tile
+  // gets a filled background; the other stays muted.
+  const opts: {
+    value: "self" | "working";
+    label: string;
+  }[] = [
+    { value: "self", label: "Single commit" },
+    { value: "working", label: "Through working tree" },
+  ];
   return (
     <div className="commit-picker-range-toggle" role="radiogroup" aria-label="Diff range">
-      <button
-        type="button"
-        className={`commit-picker-range-btn${selectedTo === "self" ? " active" : ""}`}
-        onClick={() => {
-          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "self");
-        }}
-        disabled={disabled}
-        role="radio"
-        aria-checked={selectedTo === "self"}
-        title="Single Commit"
-      >
-        Single Commit
-      </button>
-      <button
-        type="button"
-        className={`commit-picker-range-btn${selectedTo === "working" ? " active" : ""}`}
-        onClick={() => {
-          if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, "working");
-        }}
-        disabled={disabled}
-        role="radio"
-        aria-checked={selectedTo === "working"}
-        title="From the selected commit through the working tree"
-      >
-        Selected Commit → Now
-      </button>
+      {opts.map((o) => {
+        const active = selectedTo === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            className={`commit-picker-range-btn${active ? " active" : ""}`}
+            onClick={() => {
+              if (selectedDiff && selectedDiff !== "working") onChange(selectedDiff, o.value);
+            }}
+            disabled={disabled}
+            role="radio"
+            aria-checked={active}
+          >
+            <span className="commit-picker-range-btn-radio" aria-hidden="true" />
+            <span className="commit-picker-range-btn-label">{o.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
