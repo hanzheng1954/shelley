@@ -430,7 +430,8 @@ func convertGeminiResponseToContent(res *gemini.Response) []llm.Content {
 			args, err := json.Marshal(part.FunctionCall.Args)
 			if err != nil {
 				// If we can't marshal, use empty args
-				slog.DebugContext(context.Background(), "gemini_failed_to_marshal_args",
+				slog.DebugContext(
+					context.Background(), "gemini_failed_to_marshal_args",
 					"tool_name", part.FunctionCall.Name,
 					"args", string(args),
 					"err", err.Error(),

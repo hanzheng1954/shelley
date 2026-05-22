@@ -178,7 +178,8 @@ func (b *BrowseTools) screencastStart(format string, quality, maxWidth, maxHeigh
 	// -framerate 4: assume ~4fps from Chrome screencast (adjustable via every_nth_frame)
 	// -f mjpeg or image2pipe: tell ffmpeg the input format
 	// -c:v libx264 -pix_fmt yuv420p: widely compatible H.264 MP4
-	ffmpegCmd := exec.Command("ffmpeg",
+	ffmpegCmd := exec.Command(
+		"ffmpeg",
 		"-y",
 		"-f", inputFormat,
 		"-framerate", "4",
@@ -202,7 +203,8 @@ func (b *BrowseTools) screencastStart(format string, quality, maxWidth, maxHeigh
 	}
 
 	// Start CDP screencast.
-	err = chromedp.Run(browserCtx,
+	err = chromedp.Run(
+		browserCtx,
 		page.StartScreencast().
 			WithFormat(scFormat).
 			WithQuality(quality).

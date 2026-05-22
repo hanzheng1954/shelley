@@ -885,7 +885,8 @@ func TestAddCoauthorTrailer_NoDuplicates(t *testing.T) {
 		t.Helper()
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(),
+		cmd.Env = append(
+			os.Environ(),
 			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e",
 			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
 		)
@@ -917,7 +918,8 @@ func TestAddCoauthorTrailer_NoDuplicates(t *testing.T) {
 
 	cmd := exec.Command("bash", "-c", rewritten)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(
+		os.Environ(),
 		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e",
 		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@e",
 	)

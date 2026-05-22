@@ -123,7 +123,8 @@ func TestBrowserInitialization(t *testing.T) {
 
 	// Try to navigate to a simple page
 	var title string
-	err = chromedp.Run(browserCtx,
+	err = chromedp.Run(
+		browserCtx,
 		chromedp.Navigate("about:blank"),
 		chromedp.Title(&title),
 	)

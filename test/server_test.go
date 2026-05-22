@@ -1240,7 +1240,7 @@ func TestSubagentEndToEnd(t *testing.T) {
 	// Verify the subagent has the expected slug (or a suffixed version)
 	foundExpectedSlug := false
 	for _, sub := range subagents {
-		if sub.Slug != nil && (strings.HasPrefix(*sub.Slug, "test-worker")) {
+		if sub.Slug != nil && strings.HasPrefix(*sub.Slug, "test-worker") {
 			foundExpectedSlug = true
 			break
 		}

@@ -542,7 +542,8 @@ func (l *loggingService) Do(ctx context.Context, request *llm.Request) (*llm.Res
 
 		// Add usage information if available
 		if !response.Usage.IsZero() {
-			logAttrs = append(logAttrs,
+			logAttrs = append(
+				logAttrs,
 				"input_tokens", response.Usage.InputTokens,
 				"output_tokens", response.Usage.OutputTokens,
 				"cost_usd", response.Usage.CostUSD,

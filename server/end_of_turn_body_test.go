@@ -33,13 +33,15 @@ func TestFinalResponseBody_PrefersTextFromLatest(t *testing.T) {
 
 func TestFinalResponseBody_SkipsToolOnlyTail(t *testing.T) {
 	// Newest: tool-only. Older: has text. Should fall back to older text.
-	toolOnly := agentMsg(t,
+	toolOnly := agentMsg(
+		t,
 		llm.Content{
 			Type: llm.ContentTypeToolUse, ToolName: "bash",
 			ToolInput: json.RawMessage(`{"command":"git status"}`),
 		},
 	)
-	textOlder := agentMsg(t,
+	textOlder := agentMsg(
+		t,
 		llm.Content{Type: llm.ContentTypeText, Text: "All good, ready for review."},
 	)
 	got := finalResponseBody([]generated.Message{toolOnly, textOlder})
@@ -50,7 +52,8 @@ func TestFinalResponseBody_SkipsToolOnlyTail(t *testing.T) {
 
 func TestFinalResponseBody_SummarizesToolWhenNoText(t *testing.T) {
 	msgs := []generated.Message{
-		agentMsg(t,
+		agentMsg(
+			t,
 			llm.Content{
 				Type: llm.ContentTypeToolUse, ToolName: "bash",
 				ToolInput: json.RawMessage(`{"command":"git status"}`),
@@ -66,7 +69,8 @@ func TestFinalResponseBody_SummarizesToolWhenNoText(t *testing.T) {
 
 func TestFinalResponseBody_SummarizesPatchTool(t *testing.T) {
 	msgs := []generated.Message{
-		agentMsg(t,
+		agentMsg(
+			t,
 			llm.Content{
 				Type: llm.ContentTypeToolUse, ToolName: "patch",
 				ToolInput: json.RawMessage(`{"path":"server/server.go","patches":[]}`),
@@ -87,7 +91,8 @@ func TestFinalResponseBody_Empty(t *testing.T) {
 
 func TestFinalResponseBody_MultilineCommandFirstLine(t *testing.T) {
 	msgs := []generated.Message{
-		agentMsg(t,
+		agentMsg(
+			t,
 			llm.Content{
 				Type: llm.ContentTypeToolUse, ToolName: "bash",
 				ToolInput: json.RawMessage(`{"command":"\n  set -e\n  echo hi\n"}`),

@@ -601,7 +601,8 @@ func (u *CumulativeUsage) TotalInputTokens() uint64 {
 // Attr returns the cumulative usage as a slog.Attr with key "usage".
 func (u CumulativeUsage) Attr() slog.Attr {
 	elapsed := time.Since(u.StartTime)
-	return slog.Group("usage",
+	return slog.Group(
+		"usage",
 		slog.Duration("wall_time", elapsed),
 		slog.Uint64("responses", u.Responses),
 		slog.Uint64("input_tokens", u.InputTokens),

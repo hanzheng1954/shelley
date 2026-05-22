@@ -694,7 +694,8 @@ func TestDropMessageTypeCheckMigrationPreservesSearch(t *testing.T) {
 	}
 
 	assertMessagesTableHasNoCheck(t, database, ctx)
-	assertMessagesIndexesExist(t, database, ctx,
+	assertMessagesIndexesExist(
+		t, database, ctx,
 		"idx_messages_conversation_id",
 		"idx_messages_conversation_sequence",
 		"idx_messages_type",

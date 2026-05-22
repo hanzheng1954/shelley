@@ -50,7 +50,8 @@ func (d *Dispatcher) Dispatch(ctx context.Context, event Event) {
 
 	for _, ch := range channels {
 		if err := ch.Send(ctx, event); err != nil {
-			d.logger.Warn("notification channel failed",
+			d.logger.Warn(
+				"notification channel failed",
 				"channel", ch.Name(),
 				"event", string(event.Type),
 				"error", err,

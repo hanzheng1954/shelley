@@ -121,7 +121,8 @@ func TestWebAuthnPageDoesNotCrash(t *testing.T) {
 	navCtx, navCancel := context.WithTimeout(browserCtx, 15*time.Second)
 	defer navCancel()
 
-	err = chromedp.Run(navCtx,
+	err = chromedp.Run(
+		navCtx,
 		chromedp.Navigate(testURL),
 		chromedp.WaitReady("body"),
 	)
@@ -146,7 +147,8 @@ func TestWebAuthnPageDoesNotCrash(t *testing.T) {
 	evalCtx, evalCancel := context.WithTimeout(browserCtx2, 10*time.Second)
 	defer evalCancel()
 
-	err = chromedp.Run(evalCtx,
+	err = chromedp.Run(
+		evalCtx,
 		chromedp.Text("#status", &statusText, chromedp.NodeVisible),
 	)
 	if err != nil {
@@ -161,7 +163,8 @@ func TestWebAuthnPageDoesNotCrash(t *testing.T) {
 
 	// Step 5: Read the detailed result
 	var resultText string
-	err = chromedp.Run(evalCtx,
+	err = chromedp.Run(
+		evalCtx,
 		chromedp.Text("#result", &resultText, chromedp.NodeVisible),
 	)
 	if err != nil {
@@ -171,7 +174,8 @@ func TestWebAuthnPageDoesNotCrash(t *testing.T) {
 	t.Logf("WebAuthn result details:\n%s", resultText)
 
 	// Step 6: Verify browser can still perform operations after the WebAuthn page
-	err = chromedp.Run(evalCtx,
+	err = chromedp.Run(
+		evalCtx,
 		chromedp.Navigate("about:blank"),
 		chromedp.WaitReady("body"),
 	)
@@ -210,7 +214,8 @@ func TestWebAuthnDisabledFeatureFlag(t *testing.T) {
 	opCtx, opCancel := context.WithTimeout(browserCtx, 15*time.Second)
 	defer opCancel()
 
-	err = chromedp.Run(opCtx,
+	err = chromedp.Run(
+		opCtx,
 		chromedp.Navigate("about:blank"),
 		chromedp.WaitReady("body"),
 	)
@@ -223,8 +228,10 @@ func TestWebAuthnDisabledFeatureFlag(t *testing.T) {
 	// - Return an error/rejection (NotSupportedError or NotAllowedError)
 	// - Have navigator.credentials be undefined/limited
 	var result string
-	err = chromedp.Run(opCtx,
-		chromedp.Evaluate(`
+	err = chromedp.Run(
+		opCtx,
+		chromedp.Evaluate(
+			`
 			(async () => {
 				try {
 					await navigator.credentials.create({
@@ -262,7 +269,8 @@ func TestWebAuthnDisabledFeatureFlag(t *testing.T) {
 
 	// The critical check: browser must still be alive
 	var title string
-	err = chromedp.Run(opCtx,
+	err = chromedp.Run(
+		opCtx,
 		chromedp.Navigate("about:blank"),
 		chromedp.Title(&title),
 	)

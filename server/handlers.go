@@ -620,7 +620,8 @@ func generateFaviconSVG(hostname string) string {
 	// Original Cool S viewBox: 0 0 171 393 (tall rectangle)
 	// Square viewBox 0 0 400 400 with circle, S scaled and centered inside
 	// S dimensions: 171x393, scale 0.97 gives 166x381, centered in 400x400
-	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+	return fmt.Sprintf(
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
 <circle cx="200" cy="200" r="200" fill="%s"/>
 <g transform="translate(117 10) scale(0.97)">
 <g stroke-linecap="round"><g transform="translate(13.3 97.5) rotate(0 1.4 42.2)"><path d="M1.28 0.48C1.15 14.67,-0.96 71.95,-1.42 86.14M-1.47-1.73C-0.61 11.51,4.65 66.62,4.21 81.75" stroke="%s" stroke-width="14" fill="none"/></g></g>

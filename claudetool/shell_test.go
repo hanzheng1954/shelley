@@ -247,7 +247,8 @@ func TestShellProgressLoop(t *testing.T) {
 	ctx = WithToolUseID(ctx, "tool-use-123")
 
 	out := s.Tool().Run(ctx, json.RawMessage(
-		`{"command":"echo first; sleep 1; echo second"}`))
+		`{"command":"echo first; sleep 1; echo second"}`,
+	))
 	if out.Error != nil {
 		t.Fatalf("unexpected error: %v", out.Error)
 	}

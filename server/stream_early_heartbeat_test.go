@@ -37,7 +37,8 @@ func TestConversationStreamFlushesEarlyHeartbeat(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	rec := newFlusherRecorder()
-	req := httptest.NewRequest(http.MethodGet,
+	req := httptest.NewRequest(
+		http.MethodGet,
 		"/api/stream?conversation="+conv.ConversationID+"&conversation_list_hash="+currentHash, nil,
 	).WithContext(ctx)
 	done := make(chan struct{})

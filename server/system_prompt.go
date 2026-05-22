@@ -269,7 +269,8 @@ func RunNewConversationHookIn(hooksDir string, input NewConversationHookInput) N
 	}
 
 	if result != original {
-		slog.Info("new-conversation hook applied overrides",
+		slog.Info(
+			"new-conversation hook applied overrides",
 			"cwdChanged", result.Cwd != original.Cwd,
 			"promptChanged", result.Prompt != original.Prompt,
 			"modelChanged", result.Model != original.Model,
