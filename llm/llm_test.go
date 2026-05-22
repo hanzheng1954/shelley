@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 )
 
 // mockService implements Service interface for testing
@@ -599,4 +600,18 @@ func TestDumpToFile(t *testing.T) {
 
 	// This might fail due to permissions, but it shouldn't panic
 	_ = DumpToFile("test", "http://example.com", content)
+}
+
+func TestFormatRetryEvent(t *testing.T) {
+	msg := FormatRetryEvent(RetryEvent{
+		Sleep:    16 * time.Second,
+		Err:      `transport: Post "http://169.254.169.254/gateway/llm/_/gateway/anthropic/v1/messages": dial tcp 169.254.169.254:80: i/o timeout`,
+		Provider: "anthropic",
+		Model:    "claude-opus-4-7",
+	})
+
+	want := `LLM request failed: anthropic claude-opus-4-7; retrying in 16s. transport: Post "http://169.254.169.254/gateway/llm/_/gateway/anthropic/v1/messages": dial tcp 169.254.169.254:80: i/o timeout`
+	if msg != want {
+		t.Fatalf("FormatRetryEvent() = %q, want %q", msg, want)
+	}
 }

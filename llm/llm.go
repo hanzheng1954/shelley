@@ -90,6 +90,39 @@ type Request struct {
 	// OnStream is called with each streaming delta as the LLM generates content.
 	// If nil, no streaming callbacks are made. The full response is still returned from Do.
 	OnStream func(StreamDelta) `json:"-"`
+	// OnRetry is called before sleeping for a retryable LLM request failure.
+	OnRetry func(RetryEvent) `json:"-"`
+}
+
+type RetryEvent struct {
+	Attempt  int
+	Sleep    time.Duration
+	Err      string
+	Status   int
+	Provider string
+	Model    string
+}
+
+func FormatRetryEvent(event RetryEvent) string {
+	parts := []string{}
+	if event.Provider != "" {
+		parts = append(parts, event.Provider)
+	}
+	if event.Model != "" {
+		parts = append(parts, event.Model)
+	}
+	if event.Status != 0 {
+		parts = append(parts, fmt.Sprintf("status %d", event.Status))
+	}
+	msg := "LLM request failed"
+	if len(parts) > 0 {
+		msg += ": " + strings.Join(parts, " ")
+	}
+	msg += fmt.Sprintf("; retrying in %s.", event.Sleep.Round(time.Second))
+	if event.Err != "" {
+		msg += " " + Truncate(event.Err, 160)
+	}
+	return msg
 }
 
 // Message represents a message in the conversation.

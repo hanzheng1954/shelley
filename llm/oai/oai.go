@@ -934,6 +934,9 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			jitter := time.Duration(rand.Int64N(max(min(int64(base), int64(time.Second)), 1)))
 			sleep := base + jitter
 			slog.WarnContext(ctx, "openai request sleep before retry", "sleep", sleep, "attempts", attempts, "elapsed", time.Since(retryStart).Round(time.Second), "last_error", lastErrSummary)
+			if ir.OnRetry != nil {
+				ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Provider: "openai", Model: model.ModelName})
+			}
 			select {
 			case <-time.After(sleep):
 			case <-ctx.Done():

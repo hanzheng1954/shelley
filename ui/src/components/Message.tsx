@@ -214,6 +214,28 @@ function GitInfoMessage({
   );
 }
 
+function warningText(message: MessageType): string {
+  if (!message.user_data) return "Warning";
+  try {
+    const userData = JSON.parse(message.user_data);
+    const text = userData.text || "Warning";
+    if (userData.suppression_text) {
+      return `${text} ${userData.suppression_text}`;
+    }
+    return text;
+  } catch {
+    return "Warning";
+  }
+}
+
+function WarningMessage({ message }: { message: MessageType }) {
+  return (
+    <div className="message message-warning" data-testid="message-warning" role="status">
+      <div className="message-content">{warningText(message)}</div>
+    </div>
+  );
+}
+
 // DistillStatusMessage renders a compact status message for conversation distillation
 function DistillStatusMessage({ message }: { message: MessageType }) {
   let status = "in_progress";
@@ -277,6 +299,10 @@ const Message = React.memo(function Message({
 
   if (message.type === "system") {
     return null;
+  }
+
+  if (message.type === "warning") {
+    return <WarningMessage message={message} />;
   }
 
   // Render gitinfo messages as compact status updates

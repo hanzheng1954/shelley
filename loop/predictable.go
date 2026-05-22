@@ -24,6 +24,7 @@ import (
 //   - "subagent: <slug> <prompt>" - triggers subagent tool
 //   - "change_dir: <path>" - triggers change_dir tool
 //   - "delay: <seconds>" - delays response by specified seconds
+//   - "fail <error>" - emits a retry warning and returns a failure
 //   - See Do() method for complete list of supported patterns
 type PredictableService struct {
 	// TokenContextWindow size
@@ -169,6 +170,14 @@ func (s *PredictableService) Do(ctx context.Context, req *llm.Request) (*llm.Res
 		if strings.HasPrefix(inputText, "patch: ") {
 			filePath := strings.TrimPrefix(inputText, "patch: ")
 			return s.makePatchToolResponse(filePath, inputTokens), nil
+		}
+
+		if strings.HasPrefix(inputText, "fail ") {
+			errorMsg := strings.TrimSpace(strings.TrimPrefix(inputText, "fail "))
+			if req.OnRetry != nil {
+				req.OnRetry(llm.RetryEvent{Attempt: 1, Sleep: time.Second, Err: errorMsg, Provider: "predictable", Model: "predictable-v1"})
+			}
+			return nil, fmt.Errorf("predictable failure: %s", errorMsg)
 		}
 
 		if strings.HasPrefix(inputText, "error: ") {

@@ -578,6 +578,24 @@ func (cm *ConversationManager) drainPendingMessages(s *Server) {
 	}
 }
 
+const maxConsecutiveWarnings = 3
+
+func (cm *ConversationManager) recordWarning(ctx context.Context, text string) error {
+	result, err := cm.db.CreateWarningMessage(ctx, cm.conversationID, text, maxConsecutiveWarnings, "Suppressing further warnings.")
+	if err != nil {
+		return err
+	}
+	cm.Touch()
+	if result.Suppressed {
+		return nil
+	}
+	cm.subpub.Publish(result.Message.SequenceID, StreamResponse{
+		Messages:     toAPIMessages([]generated.Message{*result.Message}),
+		Conversation: &result.Conversation,
+	})
+	return nil
+}
+
 // Touch updates last activity timestamp.
 func (cm *ConversationManager) Touch() {
 	cm.mu.Lock()
@@ -996,6 +1014,9 @@ func (cm *ConversationManager) ensureLoop(service llm.Service, modelID string) e
 		History:       history,
 		Tools:         toolSet.Tools(),
 		RecordMessage: recordMessage,
+		RecordWarning: func(ctx context.Context, text string) error {
+			return cm.recordWarning(ctx, text)
+		},
 		Logger:        logger,
 		System:        system,
 		WorkingDir:    cwd,

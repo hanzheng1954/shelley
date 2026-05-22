@@ -16,6 +16,9 @@ import (
 // MessageRecordFunc is called to record new messages to persistent storage.
 type MessageRecordFunc func(ctx context.Context, message llm.Message, usage llm.Usage) error
 
+// WarningRecordFunc is called to record user-visible warnings that are not sent to the LLM.
+type WarningRecordFunc func(ctx context.Context, text string) error
+
 // GitStateChangeFunc is called when the git state changes at the end of a turn.
 // This is used to record user-visible notifications about git changes.
 type GitStateChangeFunc func(ctx context.Context, state *gitstate.GitState)
@@ -26,6 +29,7 @@ type Config struct {
 	History          []llm.Message
 	Tools            []*llm.Tool
 	RecordMessage    MessageRecordFunc
+	RecordWarning    WarningRecordFunc
 	Logger           *slog.Logger
 	System           []llm.SystemContent
 	WorkingDir       string // working directory for tools
@@ -50,6 +54,7 @@ type Loop struct {
 	llm              llm.Service
 	tools            []*llm.Tool
 	recordMessage    MessageRecordFunc
+	recordWarning    WarningRecordFunc
 	history          []llm.Message
 	messageQueue     []llm.Message
 	totalUsage       llm.Usage
@@ -85,6 +90,7 @@ func NewLoop(config Config) *Loop {
 		history:          config.History,
 		tools:            config.Tools,
 		recordMessage:    config.RecordMessage,
+		recordWarning:    config.RecordWarning,
 		messageQueue:     make([]llm.Message, 0),
 		logger:           logger,
 		system:           config.System,
@@ -254,6 +260,7 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 			Tools:    tools,
 			System:   system,
 			OnStream: l.onStreamDelta,
+			OnRetry:  l.recordRetryWarning(ctx),
 		}
 
 		// Insert missing tool results if the previous message had tool_use blocks
@@ -270,10 +277,13 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		// Add a timeout for the LLM request to prevent indefinite hangs
 		llmCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 
-		// Retry LLM requests that fail with retryable errors (EOF, connection reset)
+		// Retry LLM requests that fail with retryable errors (EOF, connection reset).
+		// Provider-internal retries own user-visible retry warnings; this outer retry
+		// catches transport failures that escape the provider without adding noise.
 		const maxRetries = 2
 		var resp *llm.Response
 		var err error
+	retryLoop:
 		for attempt := 1; attempt <= maxRetries; attempt++ {
 			resp, err = llmService.Do(llmCtx, req)
 			if err == nil {
@@ -282,11 +292,17 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 			if !isRetryableError(err) || attempt == maxRetries {
 				break
 			}
+			sleep := time.Second * time.Duration(attempt)
 			l.logger.Warn("LLM request failed with retryable error, retrying",
 				"error", err,
 				"attempt", attempt,
 				"max_retries", maxRetries)
-			time.Sleep(time.Second * time.Duration(attempt)) // Simple backoff
+			select {
+			case <-time.After(sleep):
+			case <-llmCtx.Done():
+				err = llmCtx.Err()
+				break retryLoop
+			}
 		}
 		cancel()
 
@@ -355,6 +371,18 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		l.logger.Debug("handling tool calls", "content_count", len(resp.Content))
 		if err := l.executeToolCalls(ctx, resp.Content); err != nil {
 			return err
+		}
+	}
+}
+
+func (l *Loop) recordRetryWarning(ctx context.Context) func(llm.RetryEvent) {
+	if l.recordWarning == nil {
+		return nil
+	}
+	return func(event llm.RetryEvent) {
+		msg := llm.FormatRetryEvent(event)
+		if err := l.recordWarning(ctx, msg); err != nil {
+			l.logger.Error("failed to record retry warning", "error", err)
 		}
 	}
 }

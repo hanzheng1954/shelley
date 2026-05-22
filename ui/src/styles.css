@@ -928,6 +928,16 @@ button {
   color: var(--error-text);
 }
 
+.message-warning .message-content {
+  margin-right: auto;
+  max-width: 100%;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
 .message-timestamp-row {
   display: flex;
   justify-content: center;

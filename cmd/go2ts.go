@@ -55,6 +55,7 @@ func TS() *go2ts.Go2TS {
 			db.MessageTypeError,
 			db.MessageTypeSystem,
 			db.MessageTypeGitInfo,
+			db.MessageTypeWarning,
 		},
 	)
 

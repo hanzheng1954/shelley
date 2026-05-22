@@ -650,6 +650,7 @@ const (
 	MessageTypeSystem  MessageType = "system"
 	MessageTypeError   MessageType = "error"
 	MessageTypeGitInfo MessageType = "gitinfo" // user-visible only, not sent to LLM
+	MessageTypeWarning MessageType = "warning" // user-visible only, not sent to LLM
 )
 
 // CreateMessageParams contains parameters for creating a message
@@ -736,6 +737,96 @@ func (db *DB) CreateMessage(ctx context.Context, params CreateMessageParams) (*g
 		return err
 	})
 	return &message, err
+}
+
+type CreateWarningMessageResult struct {
+	Message      *generated.Message
+	Conversation generated.Conversation
+	Suppressed   bool
+}
+
+// CreateWarningMessage creates a user-visible warning that is never sent to the LLM.
+// Consecutive warnings are capped so provider retry storms don't fill the DB.
+func (db *DB) CreateWarningMessage(ctx context.Context, conversationID, text string, maxConsecutive int64, suppressedText string) (*CreateWarningMessageResult, error) {
+	if maxConsecutive < 1 {
+		return nil, fmt.Errorf("maxConsecutive must be positive")
+	}
+
+	var result CreateWarningMessageResult
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+
+		conversation, err := q.GetConversation(ctx, conversationID)
+		if err != nil {
+			return fmt.Errorf("failed to get conversation generation: %w", err)
+		}
+		result.Conversation = conversation
+
+		count, err := q.CountConsecutiveMessagesByType(ctx, generated.CountConsecutiveMessagesByTypeParams{
+			ConversationID: conversationID,
+			Generation:     conversation.CurrentGeneration,
+			Type:           string(MessageTypeWarning),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to count consecutive warnings: %w", err)
+		}
+		if count >= maxConsecutive {
+			result.Suppressed = true
+			return nil
+		}
+
+		userData := map[string]interface{}{"text": text}
+		if count == maxConsecutive-1 {
+			userData["suppression_text"] = suppressedText
+			userData["suppressed"] = true
+		}
+		userDataJSON, err := marshalJSON(userData)
+		if err != nil {
+			return fmt.Errorf("failed to marshal warning data: %w", err)
+		}
+
+		sequenceID, err := q.GetNextSequenceID(ctx, conversationID)
+		if err != nil {
+			return fmt.Errorf("failed to get next sequence ID: %w", err)
+		}
+
+		message, err := q.CreateMessage(ctx, generated.CreateMessageParams{
+			MessageID:           uuid.New().String(),
+			ConversationID:      conversationID,
+			SequenceID:          sequenceID,
+			Generation:          conversation.CurrentGeneration,
+			Type:                string(MessageTypeWarning),
+			UserData:            userDataJSON,
+			ExcludedFromContext: true,
+		})
+		if err != nil {
+			return err
+		}
+		result.Message = &message
+
+		if err := q.UpdateConversationTimestamp(ctx, conversationID); err != nil {
+			return fmt.Errorf("failed to update conversation timestamp: %w", err)
+		}
+		conversation, err = q.GetConversation(ctx, conversationID)
+		if err != nil {
+			return fmt.Errorf("failed to get updated conversation: %w", err)
+		}
+		result.Conversation = conversation
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+func marshalJSON(v interface{}) (*string, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	str := string(data)
+	return &str, nil
 }
 
 // GetMessageByID retrieves a message by its ID

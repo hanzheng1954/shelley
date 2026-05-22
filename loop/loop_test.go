@@ -1563,12 +1563,17 @@ func TestLLMRequestRetryOnEOF(t *testing.T) {
 		recordedMessages = append(recordedMessages, message)
 		return nil
 	}
+	var warnings []string
 
 	loop := NewLoop(Config{
 		LLM:           retryService,
 		History:       []llm.Message{},
 		Tools:         []*llm.Tool{},
 		RecordMessage: recordFunc,
+		RecordWarning: func(ctx context.Context, text string) error {
+			warnings = append(warnings, text)
+			return nil
+		},
 	})
 
 	// Queue a user message
@@ -1589,6 +1594,10 @@ func TestLLMRequestRetryOnEOF(t *testing.T) {
 	// Should have been called twice (1 failure + 1 success)
 	if retryService.getCallCount() != 2 {
 		t.Errorf("expected 2 LLM calls (retry), got %d", retryService.getCallCount())
+	}
+
+	if len(warnings) != 0 {
+		t.Fatalf("expected outer EOF retry to stay silent, got %d warnings: %v", len(warnings), warnings)
 	}
 
 	// Check that success message was recorded
@@ -2083,3 +2092,35 @@ func TestMaxTokensTruncation(t *testing.T) {
 //		t.Error("expected to find tool2 result in message 3")
 //	}
 //}
+
+func TestPredictableServiceFailEmitsRetryWarning(t *testing.T) {
+	service := NewPredictableService()
+	var warnings []llm.RetryEvent
+
+	ctx := context.Background()
+	req := &llm.Request{
+		Messages: []llm.Message{
+			{Role: llm.MessageRoleUser, Content: []llm.Content{{Type: llm.ContentTypeText, Text: "fail nope"}}},
+		},
+		OnRetry: func(event llm.RetryEvent) {
+			warnings = append(warnings, event)
+		},
+	}
+
+	resp, err := service.Do(ctx, req)
+	if err == nil {
+		t.Fatal("expected failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "predictable failure: nope") {
+		t.Fatalf("expected predictable failure, got %v", err)
+	}
+	if resp != nil {
+		t.Fatal("expected nil response")
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("got %d warnings, want 1", len(warnings))
+	}
+	if warnings[0].Provider != "predictable" || warnings[0].Model != "predictable-v1" || warnings[0].Err != "nope" {
+		t.Fatalf("unexpected warning: %#v", warnings[0])
+	}
+}

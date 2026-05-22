@@ -63,6 +63,18 @@ WHERE conversation_id = ?;
 SELECT COUNT(*) FROM messages
 WHERE conversation_id = ? AND type = ?;
 
+-- name: CountConsecutiveMessagesByType :one
+SELECT COUNT(*) FROM messages m
+WHERE m.conversation_id = sqlc.arg('conversation_id')
+  AND m.generation = sqlc.arg('generation')
+  AND m.type = sqlc.arg('type')
+  AND m.sequence_id > COALESCE(
+    (SELECT MAX(prev.sequence_id) FROM messages prev
+     WHERE prev.conversation_id = sqlc.arg('conversation_id')
+       AND prev.generation = sqlc.arg('generation')
+       AND prev.type != sqlc.arg('type')),
+    0);
+
 -- name: ListMessagesTail :many
 -- Returns the last N messages in ascending order. If fewer than N
 -- exist, returns all of them.

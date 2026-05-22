@@ -702,6 +702,9 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			sleep = retryAfter
 		}
 		slog.WarnContext(ctx, "gemini_request_retry", "error", gemApiErr.Error(), "status_code", apiErr.StatusCode, "attempt", attempts+1, "sleep", sleep, "elapsed", time.Since(retryStart).Round(time.Second))
+		if ir.OnRetry != nil {
+			ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: llm.Truncate(gemApiErr.Error(), 160), Status: apiErr.StatusCode, Provider: "gemini", Model: cmp.Or(s.Model, DefaultModel)})
+		}
 		select {
 		case <-time.After(sleep):
 		case <-ctx.Done():

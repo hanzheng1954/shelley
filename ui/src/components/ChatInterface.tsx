@@ -1784,7 +1784,7 @@ function ChatInterface({
         return;
       }
 
-      if (message.type === "error") {
+      if (message.type === "error" || message.type === "warning") {
         items.push({ type: "message", generation: message.generation, message });
         return;
       }

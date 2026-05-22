@@ -10,6 +10,32 @@ import (
 	"time"
 )
 
+const countConsecutiveMessagesByType = `-- name: CountConsecutiveMessagesByType :one
+SELECT COUNT(*) FROM messages m
+WHERE m.conversation_id = ?1
+  AND m.generation = ?2
+  AND m.type = ?3
+  AND m.sequence_id > COALESCE(
+    (SELECT MAX(prev.sequence_id) FROM messages prev
+     WHERE prev.conversation_id = ?1
+       AND prev.generation = ?2
+       AND prev.type != ?3),
+    0)
+`
+
+type CountConsecutiveMessagesByTypeParams struct {
+	ConversationID string `json:"conversation_id"`
+	Generation     int64  `json:"generation"`
+	Type           string `json:"type"`
+}
+
+func (q *Queries) CountConsecutiveMessagesByType(ctx context.Context, arg CountConsecutiveMessagesByTypeParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countConsecutiveMessagesByType, arg.ConversationID, arg.Generation, arg.Type)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMessagesByType = `-- name: CountMessagesByType :one
 SELECT COUNT(*) FROM messages
 WHERE conversation_id = ? AND type = ?

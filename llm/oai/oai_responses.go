@@ -531,6 +531,9 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			}
 			retryAfter = 0
 			slog.WarnContext(ctx, "responses request sleep before retry", "sleep", sleep, "attempts", attempts, "elapsed", time.Since(retryStart).Round(time.Second), "last_error", lastErrSummary)
+			if ir.OnRetry != nil {
+				ir.OnRetry(llm.RetryEvent{Attempt: attempts + 1, Sleep: sleep, Err: lastErrSummary, Provider: "openai", Model: model.ModelName})
+			}
 			select {
 			case <-time.After(sleep):
 			case <-ctx.Done():
