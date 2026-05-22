@@ -123,6 +123,8 @@ function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [diffViewerTrigger, setDiffViewerTrigger] = useState(0);
   const [gitGraphTrigger, setGitGraphTrigger] = useState(0);
+  // Bumped to spawn a fresh interactive-shell terminal in ChatInterface.
+  const [terminalTrigger, setTerminalTrigger] = useState(0);
   const [modelsModalOpen, setModelsModalOpen] = useState(false);
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
   const [modelsRefreshTrigger, setModelsRefreshTrigger] = useState(0);
@@ -709,6 +711,7 @@ function App() {
             onToggleDrawerCollapse={toggleDrawerCollapsed}
             openDiffViewerTrigger={diffViewerTrigger}
             openGitGraphTrigger={gitGraphTrigger}
+            openTerminalTrigger={terminalTrigger}
             modelsRefreshTrigger={modelsRefreshTrigger}
             cwdSyncTrigger={cwdSyncTrigger}
             onOpenModelsModal={() => setModelsModalOpen(true)}
@@ -756,6 +759,10 @@ function App() {
           }}
           onOpenGitGraph={() => {
             setGitGraphTrigger((prev) => prev + 1);
+            setCommandPaletteOpen(false);
+          }}
+          onOpenTerminal={() => {
+            setTerminalTrigger((prev) => prev + 1);
             setCommandPaletteOpen(false);
           }}
           onOpenModelsModal={() => {

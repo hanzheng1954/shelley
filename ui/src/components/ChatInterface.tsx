@@ -548,6 +548,7 @@ interface ChatInterfaceProps {
   onToggleDrawerCollapse?: () => void;
   openDiffViewerTrigger?: number; // increment to trigger opening diff viewer
   openGitGraphTrigger?: number; // increment to trigger opening git graph viewer
+  openTerminalTrigger?: number; // increment to spawn an ephemeral login shell terminal
   modelsRefreshTrigger?: number; // increment to trigger models list refresh
   /** Increment to force re-reading the cwd from localStorage. Used when a
    *  quick action (command palette) changes the cwd while we're already on
@@ -683,6 +684,7 @@ function ChatInterface({
   onToggleDrawerCollapse,
   openDiffViewerTrigger,
   openGitGraphTrigger,
+  openTerminalTrigger,
   modelsRefreshTrigger,
   cwdSyncTrigger,
   onOpenModelsModal,
@@ -1646,6 +1648,30 @@ function ChatInterface({
       setShowGitGraph(true);
     }
   }, [openGitGraphTrigger]);
+
+  // Handle external trigger to open a terminal running the user's interactive
+  // shell. The outer terminal-session wrapper invokes
+  // `bash --login -c <command>`, so login profile scripts have already run by
+  // the time we exec the user's preferred shell (falling back to bash); we
+  // start it interactively (`-i`) rather than nesting a second `-l`. The
+  // `${SHELL:-bash}` expansion is interpreted by that outer bash wrapper.
+  // Read cwd via a ref so the effect fires only on trigger changes, not on
+  // every cwd update (which would otherwise spawn extra terminals).
+  const terminalCwdRef = useRef<string>("/");
+  terminalCwdRef.current =
+    currentConversation?.cwd || selectedCwd || window.__SHELLEY_INIT__?.default_cwd || "/";
+  useEffect(() => {
+    if (!openTerminalTrigger || openTerminalTrigger <= 0) return;
+    const terminal: EphemeralTerminal = {
+      id: `term-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      command: 'exec "${SHELL:-bash}" -i',
+      cwd: terminalCwdRef.current,
+      createdAt: new Date(),
+    };
+    setEphemeralTerminals((prev) => [...prev, terminal]);
+    setTerminalAutoFocusId(terminal.id);
+    setTimeout(() => scrollToBottom(), 100);
+  }, [openTerminalTrigger, setEphemeralTerminals]);
 
   const handleCancel = async () => {
     if (!conversationId || cancelling) return;

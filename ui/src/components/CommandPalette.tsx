@@ -26,6 +26,7 @@ interface CommandPaletteProps {
   onArchiveConversation: (conversationId: string) => void;
   onOpenDiffViewer: () => void;
   onOpenGitGraph: () => void;
+  onOpenTerminal: () => void;
   onOpenModelsModal: () => void;
   onOpenNotificationsModal: () => void;
   onNextConversation: () => void;
@@ -81,6 +82,7 @@ function CommandPalette({
   onArchiveConversation,
   onOpenDiffViewer,
   onOpenGitGraph,
+  onOpenTerminal,
   onOpenModelsModal,
   onOpenNotificationsModal,
   onNextConversation,
@@ -340,6 +342,28 @@ function CommandPalette({
         keywords: ["git", "graph", "log", "commits", "history", "branch", "tree"],
       });
     }
+
+    items.push({
+      id: "open-terminal",
+      type: "action",
+      title: "Open Terminal",
+      subtitle: "Start a new interactive shell",
+      icon: (
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+      ),
+      action: () => {
+        onOpenTerminal();
+        onClose();
+      },
+      keywords: ["terminal", "shell", "bash", "zsh", "fish", "login", "console", "tty", "pty"],
+    });
 
     items.push({
       id: "manage-models",
@@ -719,6 +743,7 @@ function CommandPalette({
     onPreviousUserMessage,
     onOpenDiffViewer,
     onOpenGitGraph,
+    onOpenTerminal,
     onOpenModelsModal,
     onOpenNotificationsModal,
     onArchiveConversation,
