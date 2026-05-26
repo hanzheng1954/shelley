@@ -203,7 +203,7 @@ func (b *BashTool) run(ctx context.Context, req bashInput) llm.ToolOut {
 	}
 	if bashkit.ChainsCdWithCommand(req.Command) {
 		hint := "[shelley hint: this command chained `cd <path>` with another command. `cd` inside a bash invocation does not persist across tool calls. Prefer calling the change_dir tool once, then running subsequent commands directly.]"
-		out = strings.TrimRight(out, "\n") + "\n\n" + hint + "\n"
+		out = hint + "\n\n" + out
 	}
 	return llm.ToolOut{LLMContent: llm.TextContent(out), Display: display}
 }
