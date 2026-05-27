@@ -1295,7 +1295,12 @@ func (s *Server) publishConversationState(state ConversationState) {
 			for _, hook := range hooks {
 				go s.sendEndOfTurnHook(context.Background(), hook, event)
 			}
-			go RunEndOfTurnHookIn(s.hooksDir, EndOfTurnHookInput{
+			// The end-of-turn hook is a side-channel for local automation
+			// (sounds, desktop notifications, etc). Fire-and-forget on a
+			// background goroutine so a slow hook doesn't delay the SSE
+			// "agent done" broadcast — but still log non-nil errors so a
+			// broken hook is visible.
+			input := EndOfTurnHookInput{
 				Type:            "end_of_turn",
 				ConversationID:  event.ConversationID,
 				Timestamp:       event.Timestamp,
@@ -1305,7 +1310,12 @@ func (s *Server) publishConversationState(state ConversationState) {
 				ConversationURL: payload.ConversationURL,
 				VMName:          payload.VMName,
 				FinalResponse:   payload.FinalResponse,
-			})
+			}
+			go func() {
+				if err := RunEndOfTurnHookIn(s.hooksDir, input); err != nil {
+					s.logger.Error("end-of-turn hook failed", "conversationID", input.ConversationID, "error", err)
+				}
+			}()
 		}
 		// Still set notifEvent so the SSE stream broadcasts it to the UI.
 		notifEvent = &event

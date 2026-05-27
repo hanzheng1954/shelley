@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -134,7 +135,40 @@ const (
 	hookSystemPrompt    = "system-prompt"
 	hookNewConversation = "new-conversation"
 	hookEndOfTurn       = "end-of-turn"
+	hookChatMessage     = "chat-message"
 )
+
+// HookHeaders converts an http.Header to a sorted list of [name, value]
+// pairs used in hook JSON payloads, stripping headers that routinely carry
+// authentication secrets (Cookie, Set-Cookie, Authorization,
+// Proxy-Authorization). Hooks are user-provided scripts on the filesystem
+// and shouldn't see those. Multi-valued headers produce one pair per value,
+// preserving value order. Returns nil if no headers remain so the
+// `omitempty` JSON tag drops the field for non-HTTP callers.
+func HookHeaders(h http.Header) [][2]string {
+	if len(h) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(h))
+	for k := range h {
+		switch http.CanonicalHeaderKey(k) {
+		case "Cookie", "Set-Cookie", "Authorization", "Proxy-Authorization":
+			continue
+		}
+		names = append(names, k)
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	sort.Strings(names)
+	out := make([][2]string, 0, len(names))
+	for _, k := range names {
+		for _, v := range h[k] {
+			out = append(out, [2]string{k, v})
+		}
+	}
+	return out
+}
 
 // NewConversationHookInput is the JSON data passed to the new-conversation hook on stdin.
 // The JSON has mutable fields at the top level and a "readonly" block for context.
@@ -177,6 +211,12 @@ type NewConversationReadonly struct {
 	IsSubagent     bool   `json:"is_subagent"`
 	ParentID       string `json:"parent_id,omitempty"`
 	IsOrchestrator bool   `json:"is_orchestrator"`
+	// Headers is the list of HTTP request headers from the incoming request
+	// that triggered the new conversation, as [name, value] pairs sorted by
+	// name. Multi-valued headers produce one pair per value. Empty for
+	// subagent conversations and other non-HTTP entry points. Header names
+	// are canonicalized by net/http (e.g., "X-Foo-Bar").
+	Headers [][2]string `json:"headers,omitempty"`
 }
 
 // NewConversationHookResult contains the (possibly modified) mutable fields
@@ -194,13 +234,16 @@ type NewConversationHookResult struct {
 // call RunNewConversationHookIn directly, which avoids the
 // process-wide $HOME env var (concurrent tests that share a Server
 // would otherwise race on it).
-func RunNewConversationHook(input NewConversationHookInput) NewConversationHookResult {
+func RunNewConversationHook(input NewConversationHookInput) (NewConversationHookResult, error) {
 	return RunNewConversationHookIn(defaultHooksDir(), input)
 }
 
 // RunNewConversationHookIn is the dir-explicit variant of
-// RunNewConversationHook.
-func RunNewConversationHookIn(hooksDir string, input NewConversationHookInput) NewConversationHookResult {
+// RunNewConversationHook. A non-nil error means the hook failed
+// (non-zero exit, invalid JSON, etc.) and the caller should abort
+// the operation. If no hook is installed, the input values are
+// returned with a nil error.
+func RunNewConversationHookIn(hooksDir string, input NewConversationHookInput) (NewConversationHookResult, error) {
 	original := NewConversationHookResult{
 		Prompt: input.Prompt,
 		Model:  input.Model,
@@ -209,17 +252,15 @@ func RunNewConversationHookIn(hooksDir string, input NewConversationHookInput) N
 
 	hookPath, err := findHookIn(hooksDir, hookNewConversation)
 	if err != nil {
-		slog.Error("new-conversation hook: findHook failed", "error", err)
-		return original
+		return original, fmt.Errorf("new-conversation hook: %w", err)
 	}
 	if hookPath == "" {
-		return original
+		return original, nil
 	}
 
 	inputJSON, err := json.Marshal(input)
 	if err != nil {
-		slog.Error("new-conversation hook: failed to marshal input", "error", err)
-		return original
+		return original, fmt.Errorf("new-conversation hook: marshal input: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -232,14 +273,13 @@ func RunNewConversationHookIn(hooksDir string, input NewConversationHookInput) N
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		slog.Error("new-conversation hook failed", "hook", hookPath, "error", err, "stderr", stderr.String())
-		return original
+		return original, fmt.Errorf("new-conversation hook %s failed: %w (stderr: %s)", hookPath, err, stderr.String())
 	}
 
 	output := strings.TrimSpace(stdout.String())
 	if output == "" {
 		// Empty output is fine — hook ran but has no overrides.
-		return original
+		return original, nil
 	}
 
 	// Parse only the mutable fields from the output.
@@ -250,8 +290,7 @@ func RunNewConversationHookIn(hooksDir string, input NewConversationHookInput) N
 		Slug   string `json:"slug"`
 	}
 	if err := json.Unmarshal([]byte(output), &hookOut); err != nil {
-		slog.Error("new-conversation hook: invalid JSON output", "error", err, "output", output)
-		return original
+		return original, fmt.Errorf("new-conversation hook %s: invalid JSON output %q: %w", hookPath, output, err)
 	}
 
 	result := original
@@ -278,7 +317,7 @@ func RunNewConversationHookIn(hooksDir string, input NewConversationHookInput) N
 		)
 	}
 
-	return result
+	return result, nil
 }
 
 // EndOfTurnHookInput is the JSON data passed to the end-of-turn hook on stdin.
@@ -302,29 +341,26 @@ type EndOfTurnHookInput struct {
 // RunEndOfTurnHook fires the end-of-turn hook from the default user
 // hooks directory ($HOME/.config/shelley/hooks). See RunEndOfTurnHookIn
 // for the dir-explicit variant used by tests.
-func RunEndOfTurnHook(input EndOfTurnHookInput) {
-	RunEndOfTurnHookIn(defaultHooksDir(), input)
+func RunEndOfTurnHook(input EndOfTurnHookInput) error {
+	return RunEndOfTurnHookIn(defaultHooksDir(), input)
 }
 
-// RunEndOfTurnHookIn runs the end-of-turn hook from an explicit
-// hooks directory. It runs the hook with the event JSON on stdin
-// and ignores stdout. Failures are logged and non-fatal: the hook
-// is purely a side-channel for local automation (sound, desktop
-// notification, etc).
-func RunEndOfTurnHookIn(hooksDir string, input EndOfTurnHookInput) {
+// RunEndOfTurnHookIn runs the end-of-turn hook from an explicit hooks
+// directory. It runs the hook with the event JSON on stdin and ignores
+// stdout. A non-nil error means the hook failed (non-zero exit, etc.);
+// the caller decides whether to propagate it.
+func RunEndOfTurnHookIn(hooksDir string, input EndOfTurnHookInput) error {
 	hookPath, err := findHookIn(hooksDir, hookEndOfTurn)
 	if err != nil {
-		slog.Error("end-of-turn hook: findHook failed", "error", err)
-		return
+		return fmt.Errorf("end-of-turn hook: %w", err)
 	}
 	if hookPath == "" {
-		return
+		return nil
 	}
 
 	inputJSON, err := json.Marshal(input)
 	if err != nil {
-		slog.Error("end-of-turn hook: failed to marshal input", "error", err)
-		return
+		return fmt.Errorf("end-of-turn hook: marshal input: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -337,10 +373,88 @@ func RunEndOfTurnHookIn(hooksDir string, input EndOfTurnHookInput) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		slog.Error("end-of-turn hook failed", "hook", hookPath, "error", err, "stderr", stderr.String())
-		return
+		return fmt.Errorf("end-of-turn hook %s failed: %w (stderr: %s)", hookPath, err, stderr.String())
 	}
 	slog.Info("end-of-turn hook applied", "hook", hookPath, "conversationID", input.ConversationID)
+	return nil
+}
+
+// ChatMessageHookInput is the JSON data passed to the chat-message hook on stdin.
+// It fires when a user posts a follow-up chat message to an existing conversation
+// (i.e., not the first message of a new conversation; that path uses the
+// new-conversation hook). The hook may rewrite the message text; other fields
+// are read-only context.
+type ChatMessageHookInput struct {
+	// Mutable — the hook may rewrite this on stdout.
+	Message string `json:"message"`
+
+	// Readonly context.
+	Readonly ChatMessageReadonly `json:"readonly"`
+}
+
+// ChatMessageReadonly is the readonly context for the chat-message hook.
+type ChatMessageReadonly struct {
+	ConversationID string      `json:"conversation_id"`
+	Model          string      `json:"model"`
+	Queued         bool        `json:"queued"`
+	Headers        [][2]string `json:"headers,omitempty"`
+}
+
+// RunChatMessageHook runs the chat-message hook from the default user hooks
+// directory. See RunChatMessageHookIn for the dir-explicit variant.
+func RunChatMessageHook(input ChatMessageHookInput) (string, error) {
+	return RunChatMessageHookIn(defaultHooksDir(), input)
+}
+
+// RunChatMessageHookIn runs the chat-message hook from an explicit hooks dir.
+// On success with non-empty stdout containing JSON `{"message": ...}`, the
+// hook output replaces the user message. A non-nil error means the hook
+// failed (non-zero exit, invalid JSON, etc.) and the caller should abort
+// the operation. If no hook is installed, the input message is returned
+// unchanged with a nil error.
+func RunChatMessageHookIn(hooksDir string, input ChatMessageHookInput) (string, error) {
+	hookPath, err := findHookIn(hooksDir, hookChatMessage)
+	if err != nil {
+		return input.Message, fmt.Errorf("chat-message hook: %w", err)
+	}
+	if hookPath == "" {
+		return input.Message, nil
+	}
+
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		return input.Message, fmt.Errorf("chat-message hook: marshal input: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, hookPath)
+	cmd.Stdin = strings.NewReader(string(inputJSON))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return input.Message, fmt.Errorf("chat-message hook %s failed: %w (stderr: %s)", hookPath, err, stderr.String())
+	}
+
+	output := strings.TrimSpace(stdout.String())
+	if output == "" {
+		return input.Message, nil
+	}
+
+	var hookOut struct {
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal([]byte(output), &hookOut); err != nil {
+		return input.Message, fmt.Errorf("chat-message hook %s: invalid JSON output %q: %w", hookPath, output, err)
+	}
+	if hookOut.Message == "" || hookOut.Message == input.Message {
+		return input.Message, nil
+	}
+	slog.Info("chat-message hook applied override", "hook", hookPath, "conversationID", input.Readonly.ConversationID)
+	return hookOut.Message, nil
 }
 
 // defaultHooksDir is $HOME/.config/shelley/hooks, or "" if $HOME is

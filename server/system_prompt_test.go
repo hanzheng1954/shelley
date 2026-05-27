@@ -407,7 +407,7 @@ func TestRunHookReceivesFullPrompt(t *testing.T) {
 
 func TestRunNewConversationHookNoHook(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, _ := RunNewConversationHook(NewConversationHookInput{
 		Prompt: "hello",
 		Model:  "test-model",
 		Cwd:    "/original/dir",
@@ -443,7 +443,7 @@ echo '{"cwd": "/new/worktree"}'`
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, _ := RunNewConversationHook(NewConversationHookInput{
 		Prompt: "hello",
 		Model:  "test-model",
 		Cwd:    "/original/dir",
@@ -472,7 +472,7 @@ echo '{"prompt": "modified prompt", "model": "new-model", "cwd": "/new/dir", "sl
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, _ := RunNewConversationHook(NewConversationHookInput{
 		Prompt: "original prompt",
 		Model:  "original-model",
 		Cwd:    "/original/dir",
@@ -507,7 +507,7 @@ echo '{"slug": "my-slug"}'`
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, _ := RunNewConversationHook(NewConversationHookInput{
 		Prompt: "original prompt",
 		Model:  "original-model",
 		Cwd:    "/original/dir",
@@ -542,7 +542,7 @@ func TestRunNewConversationHookEmptyOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, _ := RunNewConversationHook(NewConversationHookInput{
 		Prompt: "hello",
 		Model:  "test-model",
 		Cwd:    "/original/dir",
@@ -569,7 +569,7 @@ func TestRunNewConversationHookReceivesJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	RunNewConversationHook(NewConversationHookInput{
+	_, _ = RunNewConversationHook(NewConversationHookInput{
 		Prompt: "build me a thing",
 		Model:  "claude-sonnet",
 		Cwd:    "/home/user/project",
@@ -615,7 +615,7 @@ func TestRunNewConversationHookReceivesJSON(t *testing.T) {
 	}
 }
 
-func TestRunNewConversationHookFailureReturnsOriginals(t *testing.T) {
+func TestRunNewConversationHookFailureReturnsError(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -624,25 +624,22 @@ func TestRunNewConversationHookFailureReturnsOriginals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Write a hook that fails
 	hookPath := filepath.Join(hookDir, "new-conversation")
 	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, err := RunNewConversationHook(NewConversationHookInput{
 		Prompt: "hello",
 		Model:  "my-model",
 		Cwd:    "/original/dir",
 	})
-	if result.Cwd != "/original/dir" {
-		t.Errorf("expected /original/dir on failure, got %q", result.Cwd)
+	if err == nil {
+		t.Fatal("expected error from failing hook, got nil")
 	}
-	if result.Prompt != "hello" {
-		t.Errorf("expected hello on failure, got %q", result.Prompt)
-	}
-	if result.Model != "my-model" {
-		t.Errorf("expected my-model on failure, got %q", result.Model)
+	// Originals are still returned so the caller can fall back if it wants.
+	if result.Cwd != "/original/dir" || result.Prompt != "hello" || result.Model != "my-model" {
+		t.Errorf("expected originals returned alongside error, got %+v", result)
 	}
 }
 
@@ -661,11 +658,14 @@ func TestRunNewConversationHookInvalidJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, err := RunNewConversationHook(NewConversationHookInput{
 		Cwd: "/original/dir",
 	})
+	if err == nil {
+		t.Fatal("expected error on invalid JSON, got nil")
+	}
 	if result.Cwd != "/original/dir" {
-		t.Errorf("expected /original/dir on invalid JSON, got %q", result.Cwd)
+		t.Errorf("expected /original/dir alongside error, got %q", result.Cwd)
 	}
 }
 
@@ -684,7 +684,7 @@ func TestRunNewConversationHookNonExecutable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, _ := RunNewConversationHook(NewConversationHookInput{
 		Cwd: "/original/dir",
 	})
 	if result.Cwd != "/original/dir" {
@@ -709,7 +709,7 @@ echo '{"model": "better-model"}'`
 		t.Fatal(err)
 	}
 
-	result := RunNewConversationHook(NewConversationHookInput{
+	result, _ := RunNewConversationHook(NewConversationHookInput{
 		Prompt: "keep this",
 		Model:  "original-model",
 		Cwd:    "/keep/this/too",
@@ -881,7 +881,7 @@ echo '{"slug": "Hello World!"}'`
 
 func TestRunEndOfTurnHookNoHook(t *testing.T) {
 	// Should be a no-op and not panic.
-	RunEndOfTurnHookIn(t.TempDir(), EndOfTurnHookInput{ConversationID: "abc"})
+	_ = RunEndOfTurnHookIn(t.TempDir(), EndOfTurnHookInput{ConversationID: "abc"})
 }
 
 func TestRunEndOfTurnHookReceivesJSON(t *testing.T) {
@@ -898,7 +898,7 @@ func TestRunEndOfTurnHookReceivesJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	RunEndOfTurnHookIn(hooksDir, EndOfTurnHookInput{
+	_ = RunEndOfTurnHookIn(hooksDir, EndOfTurnHookInput{
 		Type:            "end_of_turn",
 		ConversationID:  "conv-789",
 		Hostname:        "phil-dev",
@@ -930,14 +930,15 @@ func TestRunEndOfTurnHookReceivesJSON(t *testing.T) {
 	}
 }
 
-func TestRunEndOfTurnHookFailureIsNonFatal(t *testing.T) {
+func TestRunEndOfTurnHookFailureReturnsError(t *testing.T) {
 	hooksDir := t.TempDir()
 	hookPath := filepath.Join(hooksDir, "end-of-turn")
 	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Just make sure it doesn't panic.
-	RunEndOfTurnHookIn(hooksDir, EndOfTurnHookInput{ConversationID: "abc"})
+	if err := RunEndOfTurnHookIn(hooksDir, EndOfTurnHookInput{ConversationID: "abc"}); err == nil {
+		t.Fatal("expected error from failing hook, got nil")
+	}
 }
 
 func TestExeDevDefaultPortUsesInjectableClient(t *testing.T) {
@@ -964,4 +965,180 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
+}
+
+func TestRunNewConversationHookReceivesHeaders(t *testing.T) {
+	hooksDir := t.TempDir()
+	dumpFile := filepath.Join(t.TempDir(), "new-conv.json")
+	hookPath := filepath.Join(hooksDir, "new-conversation")
+	script := "#!/bin/sh\ncat > " + dumpFile + "\n"
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _ = RunNewConversationHookIn(hooksDir, NewConversationHookInput{
+		Prompt: "hello",
+		Readonly: NewConversationReadonly{
+			ConversationID: "conv-1",
+			Headers: [][2]string{
+				{"X-Custom", "a"},
+				{"X-Custom", "b"},
+				{"X-ExeDev-Email", "user@example.com"},
+			},
+		},
+	})
+
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("failed to read hook input: %v", err)
+	}
+	input := string(data)
+	for _, expected := range []string{
+		`"headers":`,
+		`["X-Custom","a"]`,
+		`["X-Custom","b"]`,
+		`["X-ExeDev-Email","user@example.com"]`,
+	} {
+		if !strings.Contains(input, expected) {
+			t.Errorf("hook input missing %q\ngot: %s", expected, input)
+		}
+	}
+}
+
+func TestRunChatMessageHookNoHook(t *testing.T) {
+	got, _ := RunChatMessageHookIn(t.TempDir(), ChatMessageHookInput{Message: "original"})
+	if got != "original" {
+		t.Errorf("expected unchanged message, got %q", got)
+	}
+}
+
+func TestRunChatMessageHookRewrites(t *testing.T) {
+	hooksDir := t.TempDir()
+	hookPath := filepath.Join(hooksDir, "chat-message")
+	script := `#!/bin/sh
+echo '{"message": "rewritten"}'`
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := RunChatMessageHookIn(hooksDir, ChatMessageHookInput{
+		Message:  "original",
+		Readonly: ChatMessageReadonly{ConversationID: "c1"},
+	})
+	if got != "rewritten" {
+		t.Errorf("expected rewritten, got %q", got)
+	}
+}
+
+func TestRunChatMessageHookReceivesContext(t *testing.T) {
+	hooksDir := t.TempDir()
+	dumpFile := filepath.Join(t.TempDir(), "chat-message.json")
+	hookPath := filepath.Join(hooksDir, "chat-message")
+	script := "#!/bin/sh\ncat > " + dumpFile + "\n"
+	if err := os.WriteFile(hookPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _ = RunChatMessageHookIn(hooksDir, ChatMessageHookInput{
+		Message: "hello",
+		Readonly: ChatMessageReadonly{
+			ConversationID: "conv-42",
+			Model:          "claude-sonnet",
+			Queued:         true,
+			Headers:        [][2]string{{"X-Hdr", "v"}},
+		},
+	})
+
+	data, err := os.ReadFile(dumpFile)
+	if err != nil {
+		t.Fatalf("failed to read hook input: %v", err)
+	}
+	input := string(data)
+	for _, expected := range []string{
+		`"message":"hello"`,
+		`"conversation_id":"conv-42"`,
+		`"model":"claude-sonnet"`,
+		`"queued":true`,
+		`["X-Hdr","v"]`,
+	} {
+		if !strings.Contains(input, expected) {
+			t.Errorf("hook input missing %q\ngot: %s", expected, input)
+		}
+	}
+}
+
+func TestRunChatMessageHookInvalidJSONReturnsError(t *testing.T) {
+	hooksDir := t.TempDir()
+	hookPath := filepath.Join(hooksDir, "chat-message")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\necho 'not json'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := RunChatMessageHookIn(hooksDir, ChatMessageHookInput{Message: "keep"})
+	if err == nil {
+		t.Fatal("expected error on invalid JSON, got nil")
+	}
+	if got != "keep" {
+		t.Errorf("expected original message returned alongside error, got %q", got)
+	}
+}
+
+func TestRunChatMessageHookFailureReturnsError(t *testing.T) {
+	hooksDir := t.TempDir()
+	hookPath := filepath.Join(hooksDir, "chat-message")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := RunChatMessageHookIn(hooksDir, ChatMessageHookInput{Message: "keep"})
+	if err == nil {
+		t.Fatal("expected error from failing hook, got nil")
+	}
+	if got != "keep" {
+		t.Errorf("expected original message returned alongside error, got %q", got)
+	}
+}
+
+func TestHookHeadersStripsAuthSecrets(t *testing.T) {
+	in := http.Header{}
+	in.Set("X-ExeDev-Email", "user@example.com")
+	in.Add("Cookie", "session=secret")
+	in.Add("Set-Cookie", "k=v")
+	in.Set("Authorization", "Bearer x")
+	in.Set("Proxy-Authorization", "Bearer y")
+	in.Set("User-Agent", "curl/8")
+
+	out := HookHeaders(in)
+	seen := map[string][]string{}
+	for _, p := range out {
+		seen[p[0]] = append(seen[p[0]], p[1])
+	}
+	for _, k := range []string{"Cookie", "Set-Cookie", "Authorization", "Proxy-Authorization"} {
+		if _, ok := seen[k]; ok {
+			t.Errorf("%s should be stripped: %v", k, out)
+		}
+	}
+	if got := seen["X-Exedev-Email"]; len(got) != 1 || got[0] != "user@example.com" {
+		t.Errorf("X-ExeDev-Email missing or wrong: %v", out)
+	}
+	if got := seen["User-Agent"]; len(got) != 1 || got[0] != "curl/8" {
+		t.Errorf("User-Agent missing or wrong: %v", out)
+	}
+	// Result should be sorted by name.
+	for i := 1; i < len(out); i++ {
+		if out[i-1][0] > out[i][0] {
+			t.Errorf("HookHeaders output not sorted: %v", out)
+			break
+		}
+	}
+}
+
+func TestHookHeadersEmptyReturnsNil(t *testing.T) {
+	if HookHeaders(nil) != nil {
+		t.Errorf("expected nil for nil input")
+	}
+	onlySecrets := http.Header{}
+	onlySecrets.Set("Cookie", "x=y")
+	onlySecrets.Set("Authorization", "Bearer z")
+	if HookHeaders(onlySecrets) != nil {
+		t.Errorf("expected nil when only auth secrets present")
+	}
 }

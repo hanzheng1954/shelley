@@ -1095,6 +1095,29 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	// Decide whether this message will be queued or accepted immediately.
+	// The chat-message hook is told which path it will take so it can react
+	// accordingly.
+	willQueue := req.Queue || manager.IsDistilling()
+
+	// Run chat-message hook; the hook may rewrite the message text. Hook
+	// failures abort the request — the user's message is not delivered.
+	newMsg, err := RunChatMessageHookIn(s.hooksDir, ChatMessageHookInput{
+		Message: req.Message,
+		Readonly: ChatMessageReadonly{
+			ConversationID: conversationID,
+			Model:          modelID,
+			Queued:         willQueue,
+			Headers:        HookHeaders(r.Header),
+		},
+	})
+	if err != nil {
+		s.logger.Error("chat-message hook failed", "conversationID", conversationID, "error", err)
+		http.Error(w, "chat-message hook failed", http.StatusInternalServerError)
+		return
+	}
+	req.Message = newMsg
+
 	// Create user message
 	userMessage := llm.Message{
 		Role: llm.MessageRoleUser,
@@ -1107,7 +1130,11 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	// The message will be sent when the agent finishes its current turn or
 	// current distillation. Force queueing during distillation even if the
 	// client has not seen the distill status update yet.
-	if req.Queue || manager.IsDistilling() {
+	//
+	// Use the willQueue snapshot computed before the chat-message hook so
+	// the hook's view ("queued" in its readonly context) is authoritative
+	// and stays consistent with what actually happens here.
+	if willQueue {
 		if err := manager.QueueMessage(ctx, s, modelID, userMessage); err != nil {
 			s.logger.Error("Failed to queue user message", "conversationID", conversationID, "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -1219,16 +1246,23 @@ func (s *Server) handleNewConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	conversationID := conversation.ConversationID
 
-	// Run new-conversation hook, which may override prompt, model, and cwd
-	hookResult := RunNewConversationHookIn(s.hooksDir, NewConversationHookInput{
+	// Run new-conversation hook, which may override prompt, model, and cwd.
+	// Hook failures abort the request.
+	hookResult, hookErr := RunNewConversationHookIn(s.hooksDir, NewConversationHookInput{
 		Prompt: req.Message,
 		Model:  modelID,
 		Cwd:    derefString(cwdPtr),
 		Readonly: NewConversationReadonly{
 			ConversationID: conversationID,
 			IsOrchestrator: convOpts.IsOrchestrator(),
+			Headers:        HookHeaders(r.Header),
 		},
 	})
+	if hookErr != nil {
+		s.logger.Error("new-conversation hook failed", "conversationID", conversationID, "error", hookErr)
+		http.Error(w, "new-conversation hook failed", http.StatusInternalServerError)
+		return
+	}
 	if hookResult.Cwd != derefString(cwdPtr) {
 		if err := s.db.UpdateConversationCwd(ctx, conversationID, hookResult.Cwd); err != nil {
 			s.logger.Error("Failed to update cwd from hook", "error", err)
