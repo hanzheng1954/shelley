@@ -13,6 +13,10 @@ interface CommandItem {
   shortcut?: string;
   icon?: React.ReactNode;
   action: () => void;
+  // If set, cmd/ctrl/shift/middle-click opens this URL in a new tab instead
+  // of running action(). Used for conversation items so users can pop a
+  // conversation into a separate tab.
+  url?: string;
   keywords?: string[]; // Additional keywords for search
 }
 
@@ -857,6 +861,7 @@ function CommandPalette({
         onSelectConversation(conv);
         onClose();
       },
+      url: conv.slug ? `/c/${conv.slug}` : undefined,
     }),
     [onSelectConversation, onClose],
   );
@@ -984,7 +989,22 @@ function CommandPalette({
                 key={item.id}
                 data-index={index}
                 className={`command-palette-item ${index === selectedIndex ? "selected" : ""}`}
-                onClick={() => item.action()}
+                onClick={(e) => {
+                  if (item.url && (e.metaKey || e.ctrlKey || e.shiftKey)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(item.url, "_blank", "noopener");
+                    return;
+                  }
+                  item.action();
+                }}
+                onAuxClick={(e) => {
+                  if (item.url && e.button === 1) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(item.url, "_blank", "noopener");
+                  }
+                }}
                 onMouseEnter={() => setSelectedIndex(index)}
               >
                 <div className="command-palette-item-icon">{item.icon}</div>

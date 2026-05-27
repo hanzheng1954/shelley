@@ -9,6 +9,7 @@ import {
   applyStableKeyOrder,
 } from "../utils/conversationSort";
 import { tildifyPath } from "../utils/tildify";
+import { handleModifiedNavClick } from "../utils/openInNewTab";
 
 type GroupBy = "none" | "cwd" | "git_repo";
 
@@ -762,6 +763,7 @@ function ConversationDrawer({
           className={`conversation-item ${isActive ? "active" : ""}${isNew ? " conversation-item-enter" : ""}`}
           onClick={(e) => {
             if (isDraft) {
+              if (handleModifiedNavClick(e, "/new")) return;
               onNewConversation();
               return;
             }
@@ -1166,7 +1168,10 @@ function ConversationDrawer({
             {/* New conversation button - mobile only */}
             {!showArchived && (
               <button
-                onClick={onNewConversation}
+                onClick={(e) => {
+                  if (handleModifiedNavClick(e, "/new")) return;
+                  onNewConversation();
+                }}
                 className="btn-icon hide-on-desktop"
                 aria-label={t("newConversation")}
               >

@@ -29,6 +29,7 @@ import { focusMessageInputIfUnfocused } from "../utils/focusMessageInput";
 import MessageSelectionToolbar from "./MessageSelectionToolbar";
 import { buildMessageQuote } from "../utils/messageQuote";
 import { tildifyPath } from "../utils/tildify";
+import { handleModifiedNavClick } from "../utils/openInNewTab";
 import GitGraphViewer from "./GitGraphViewer";
 import AgentsMdEditorModal from "./AgentsMdEditorModal";
 import BashTool from "./BashTool";
@@ -2577,7 +2578,14 @@ function ChatInterface({
 
         <div className="header-actions">
           {/* Green + icon in circle for new conversation */}
-          <button onClick={onNewConversation} className="btn-new" aria-label={t("newConversation")}>
+          <button
+            onClick={(e) => {
+              if (handleModifiedNavClick(e, "/new")) return;
+              onNewConversation();
+            }}
+            className="btn-new"
+            aria-label={t("newConversation")}
+          >
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="chat-icon-1rem">
               <path
                 strokeLinecap="round"
