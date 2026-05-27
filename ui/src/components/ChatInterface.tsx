@@ -1303,6 +1303,13 @@ function ChatInterface({
   // Handles both initial load (pending scroll from loadMessages) and streaming updates.
   useLayoutEffect(() => {
     if (loading) return;
+    // First message render after a >5s tab-hidden resume absorbs the
+    // catch-up batch without yanking the user. Clear unconditionally
+    // here (before the early returns) so the flag never latches if the
+    // first render happens to take the pending-scroll branch — and so
+    // subsequent streaming deltas auto-scroll normally again.
+    const wasCatchingUp = catchingUpRef.current;
+    catchingUpRef.current = false;
     const pending = pendingScrollRef.current;
     if (pending !== undefined) {
       pendingScrollRef.current = undefined;
@@ -1319,7 +1326,7 @@ function ChatInterface({
       }
       return;
     }
-    if (!userScrolledRef.current && !catchingUpRef.current) {
+    if (!userScrolledRef.current && !wasCatchingUp) {
       scrollToBottom();
     }
   }, [messages, loading]);
