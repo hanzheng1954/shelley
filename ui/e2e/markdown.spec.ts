@@ -1,38 +1,37 @@
 import { test, expect } from "@playwright/test";
 import { createConversationViaAPI } from "./helpers";
 
+// All tests create the conversation via the API and then navigate directly to
+// it. This avoids the SSE subscribe-vs-publish race that occurs when the
+// browser opens a brand-new conversation while the first turn is still being
+// recorded (see helpers.ts), which otherwise flakes waitForSelector(".message-agent").
 test.describe("Markdown rendering and sanitization", () => {
-  test("renders markdown formatting in agent messages", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill("markdown: **bold** and *italic* and `code`");
-    await page.getByTestId("send-button").click();
-
-    // Wait for agent response
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+  test("renders markdown formatting in agent messages", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
+      "markdown: **bold** and *italic* and `code`",
+    );
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
     // Markdown should be rendered as HTML elements
-    await expect(agent.locator("strong")).toContainText("bold");
+    await expect(agent.locator("strong")).toContainText("bold", { timeout: 30000 });
     await expect(agent.locator("em")).toContainText("italic");
     await expect(agent.locator("code")).toContainText("code");
   });
 
-  test("strips script tags from agent messages", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("strips script tags from agent messages", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       'markdown: hello <script>alert("xss")</script> world',
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
     // The text should be there, but no script element
-    await expect(agent).toContainText("hello");
+    await expect(agent).toContainText("hello", { timeout: 30000 });
     await expect(agent).toContainText("world");
     expect(await agent.locator("script").count()).toBe(0);
     // Also confirm the alert text doesn't appear anywhere in the raw HTML
@@ -41,42 +40,36 @@ test.describe("Markdown rendering and sanitization", () => {
     expect(html).not.toContain("alert");
   });
 
-  test("strips img tags (remote image tracking)", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("strips img tags (remote image tracking)", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       "markdown: ![tracker](https://evil.com/pixel.gif) safe text",
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
+    await expect(agent).toContainText("safe text", { timeout: 30000 });
     expect(await agent.locator("img").count()).toBe(0);
     const html = await agent.innerHTML();
     expect(html).not.toContain("<img");
     expect(html).not.toContain("evil.com");
   });
 
-  test("strips iframe tags", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("strips iframe tags", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       'markdown: <iframe src="https://evil.com"></iframe> safe',
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
+    await expect(agent).toContainText("safe", { timeout: 30000 });
     expect(await agent.locator("iframe").count()).toBe(0);
-    await expect(agent).toContainText("safe");
   });
 
   test("strips event handler attributes", async ({ page, request }) => {
-    // Use API helper to avoid SSE subscribe-vs-publish race (see helpers.ts).
     const slug = await createConversationViaAPI(
       request,
       'markdown: <div onclick="alert(1)">click me</div>',
@@ -91,106 +84,88 @@ test.describe("Markdown rendering and sanitization", () => {
     expect(html).not.toContain("alert");
   });
 
-  test("sanitizes javascript: href in links", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("sanitizes javascript: href in links", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       'markdown: <a href="javascript:alert(document.cookie)">steal cookies</a>',
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
-    await expect(agent).toContainText("steal cookies");
+    await expect(agent).toContainText("steal cookies", { timeout: 30000 });
     const html = await agent.innerHTML();
     expect(html).not.toContain("javascript:");
   });
 
-  test("markdown links open in new tab with noopener", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("markdown links open in new tab with noopener", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       "markdown: [example](https://example.com)",
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const link = page.locator(".message-agent").last().locator("a").first();
-    await expect(link).toHaveAttribute("href", "https://example.com");
+    await expect(link).toHaveAttribute("href", "https://example.com", { timeout: 30000 });
     await expect(link).toHaveAttribute("target", "_blank");
     await expect(link).toHaveAttribute("rel", "noopener noreferrer");
   });
 
-  test("user messages never render markdown", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
+  test("user messages never render markdown", async ({ page, request }) => {
     // Send a message with markdown syntax - user messages should show raw text
-    await page.getByTestId("message-input").fill("**bold** and *italic*");
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-user", { timeout: 10000 });
+    const slug = await createConversationViaAPI(request, "**bold** and *italic*");
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const user = page.locator(".message-user").last();
+    // The raw markdown characters should be visible
+    await expect(user).toContainText("**bold**", { timeout: 30000 });
     // User message should NOT have <strong> or <em> — should be plain text
     expect(await user.locator("strong").count()).toBe(0);
     expect(await user.locator("em").count()).toBe(0);
-    // The raw markdown characters should be visible
-    await expect(user).toContainText("**bold**");
   });
 
-  test("strips SVG with embedded script", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("strips SVG with embedded script", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       'markdown: <svg onload="alert(1)"><circle r="50"/></svg> safe',
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
+    await expect(agent).toContainText("safe", { timeout: 30000 });
     const html = await agent.innerHTML();
     expect(html).not.toContain("<svg");
     expect(html).not.toContain("onload");
-    await expect(agent).toContainText("safe");
   });
 
-  test("strips non-checkbox input elements (phishing prevention)", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("strips non-checkbox input elements (phishing prevention)", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       'markdown: <input type="text" placeholder="Enter password"> <input type="password"> safe',
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
+    await expect(agent).toContainText("safe", { timeout: 30000 });
     // Text and password inputs should be stripped
     expect(await agent.locator('input[type="text"]').count()).toBe(0);
     expect(await agent.locator('input[type="password"]').count()).toBe(0);
-    await expect(agent).toContainText("safe");
   });
 
-  test("strips form and input[type=submit] (phishing prevention)", async ({ page }) => {
-    await page.goto('/new');
-    await expect(page.getByTestId("message-input")).toBeVisible({ timeout: 30000 });
-
-    await page.getByTestId("message-input").fill(
+  test("strips form and input[type=submit] (phishing prevention)", async ({ page, request }) => {
+    const slug = await createConversationViaAPI(
+      request,
       'markdown: <form action="https://evil.com/steal"><button type="submit">Login</button></form> safe',
     );
-    await page.getByTestId("send-button").click();
-
-    await page.waitForSelector(".message-agent", { timeout: 30000 });
+    await page.goto(`/c/${slug}`);
+    await page.waitForLoadState("domcontentloaded");
 
     const agent = page.locator(".message-agent").last();
+    await expect(agent).toContainText("safe", { timeout: 30000 });
     // Inspect just the rendered markdown content; the surrounding action bar
     // legitimately contains <button> (copy/usage) and must be excluded.
     const content = agent.locator('[data-testid="message-content"]');
