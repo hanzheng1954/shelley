@@ -149,6 +149,8 @@ export const ru: TranslationKeys = {
   columnProvider: "Провайдер",
   columnSource: "Источник",
   columnActions: "Действия",
+  columnImages: "Изображения",
+  imageSupportAutoShort: "авто",
   tagsPlaceholder: "через запятую, напр., slug, cheap",
   tagsTooltip:
     'Теги через запятую для этой модели. Используйте "slug", чтобы отметить модель для генерации заголовков диалогов. Если ни одна модель не имеет тега "slug", будет использована модель диалога.',

@@ -149,6 +149,8 @@ export const es: TranslationKeys = {
   columnProvider: "Proveedor",
   columnSource: "Origen",
   columnActions: "Acciones",
+  columnImages: "Imágenes",
+  imageSupportAutoShort: "auto",
   tagsPlaceholder: "separadas por comas, ej., slug, cheap",
   tagsTooltip:
     'Etiquetas separadas por comas para este modelo. Use "slug" para marcar este modelo para generar títulos de conversación. Si ningún modelo tiene la etiqueta "slug", se usará el modelo de la conversación.',

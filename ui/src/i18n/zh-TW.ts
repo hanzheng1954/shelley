@@ -149,6 +149,8 @@ export const zhTW: TranslationKeys = {
   columnProvider: "提供者",
   columnSource: "來源",
   columnActions: "操作",
+  columnImages: "圖片",
+  imageSupportAutoShort: "自動",
   tagsPlaceholder: "逗號分隔，例如：slug, cheap",
   tagsTooltip:
     '此模型的逗號分隔標籤。使用 "slug" 標記此模型用於產生對話標題。若沒有模型帶有 "slug" 標籤，將使用對話目前的模型。',

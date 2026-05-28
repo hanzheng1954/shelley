@@ -59,6 +59,7 @@ interface BuiltInModel {
   display_name?: string;
   source?: string;
   ready: boolean;
+  supports_images?: boolean;
 }
 
 interface FormData {
@@ -90,6 +91,54 @@ const emptyForm: FormData = {
 // Common reasoning.effort values for the OpenAI Responses API. Free-form so
 // users can type anything providers add later.
 const REASONING_EFFORT_SUGGESTIONS = ["none", "minimal", "low", "medium", "high", "xhigh"];
+
+type ImageSupportIndicatorProps =
+  | { mode: "resolved"; resolved: boolean }
+  | { mode: "custom"; imageSupport: "auto" | "yes" | "no" };
+
+function ImageSupportIndicator(props: ImageSupportIndicatorProps) {
+  const { t } = useI18n();
+  let kind: "yes" | "no" | "auto";
+  if (props.mode === "resolved") {
+    kind = props.resolved ? "yes" : "no";
+  } else {
+    kind = props.imageSupport;
+  }
+  if (kind === "yes") {
+    return (
+      <span
+        className="models-table-image-yes"
+        role="img"
+        title={t("imageSupportYes")}
+        aria-label={t("imageSupportYes")}
+      >
+        ✓
+      </span>
+    );
+  }
+  if (kind === "no") {
+    return (
+      <span
+        className="models-table-image-no"
+        role="img"
+        title={t("imageSupportNo")}
+        aria-label={t("imageSupportNo")}
+      >
+        ✕
+      </span>
+    );
+  }
+  return (
+    <span
+      className="models-table-image-auto"
+      role="img"
+      title={t("imageSupportAuto")}
+      aria-label={t("imageSupportAuto")}
+    >
+      {t("imageSupportAutoShort")}
+    </span>
+  );
+}
 
 function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
   const { t } = useI18n();
@@ -575,6 +624,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 <th>{t("columnSource")}</th>
                 <th>{t("endpoint")}</th>
                 <th>{t("tags")}</th>
+                <th className="models-table-images-col">{t("columnImages")}</th>
                 <th className="models-table-actions-col">
                   <span className="sr-only">{t("columnActions")}</span>
                 </th>
@@ -591,6 +641,12 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                     <td>{model.source}</td>
                     <td className="models-table-muted">—</td>
                     <td className="models-table-muted">—</td>
+                    <td className="models-table-images">
+                      <ImageSupportIndicator
+                        mode="resolved"
+                        resolved={model.supports_images ?? true}
+                      />
+                    </td>
                     <td className="models-table-actions"></td>
                   </tr>
                 ))}
@@ -605,6 +661,12 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                   </td>
                   <td className="models-table-tags" title={model.tags || undefined}>
                     {model.tags || "—"}
+                  </td>
+                  <td className="models-table-images">
+                    <ImageSupportIndicator
+                      mode="custom"
+                      imageSupport={model.image_support ?? "auto"}
+                    />
                   </td>
                   <td className="models-table-actions">
                     <button

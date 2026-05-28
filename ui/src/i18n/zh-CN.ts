@@ -149,6 +149,8 @@ export const zhCN: TranslationKeys = {
   columnProvider: "提供商",
   columnSource: "来源",
   columnActions: "操作",
+  columnImages: "图片",
+  imageSupportAutoShort: "自动",
   tagsPlaceholder: "逗号分隔，例如：slug, cheap",
   tagsTooltip:
     '此模型的逗号分隔标签。使用 "slug" 标记此模型用于生成对话标题。如果没有模型带有 "slug" 标签，将使用对话当前的模型。',

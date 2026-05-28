@@ -149,6 +149,8 @@ export const ja: TranslationKeys = {
   columnProvider: "プロバイダー",
   columnSource: "ソース",
   columnActions: "操作",
+  columnImages: "画像",
+  imageSupportAutoShort: "自動",
   tagsPlaceholder: "カンマ区切り、例: slug, cheap",
   tagsTooltip:
     'このモデル用のカンマ区切りのタグ。会話タイトル生成用のモデルとしてマークするには"slug"を使用します。"slug"タグを持つモデルがない場合は、会話のモデルが使用されます。',

@@ -6784,6 +6784,32 @@ svg {
   width: 1%;
 }
 
+.models-table-images-col {
+  width: 1%;
+  text-align: center;
+}
+
+.models-table-images {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.models-table-image-yes {
+  color: var(--green-text, #16a34a);
+  font-weight: 600;
+}
+
+.models-table-image-no {
+  color: var(--red-text, #b91c1c);
+}
+
+.models-table-image-auto {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+
 .model-card {
   padding: 0.75rem 1rem;
   background: var(--bg-base);

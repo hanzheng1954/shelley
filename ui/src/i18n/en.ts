@@ -149,6 +149,8 @@ export const en: TranslationKeys = {
   columnProvider: "Provider",
   columnSource: "Source",
   columnActions: "Actions",
+  columnImages: "Images",
+  imageSupportAutoShort: "auto",
   tagsPlaceholder: "comma-separated, e.g., slug, cheap",
   tagsTooltip:
     'Comma-separated tags for this model. Use "slug" to mark this model for generating conversation titles. If no model has the "slug" tag, the conversation\'s model will be used.',

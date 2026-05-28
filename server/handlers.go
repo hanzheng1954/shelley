@@ -1995,6 +1995,12 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// imageCapable is an optional interface that LLM services may implement to
+// report whether they accept image inputs.
+type imageCapable interface {
+	SupportsImages() bool
+}
+
 // ModelInfo represents a model in the API response
 type ModelInfo struct {
 	ID               string `json:"id"`
@@ -2003,13 +2009,14 @@ type ModelInfo struct {
 	Ready            bool   `json:"ready"`
 	MaxContextTokens int    `json:"max_context_tokens,omitempty"`
 	IsDefault        bool   `json:"is_default,omitempty"`
+	SupportsImages   bool   `json:"supports_images"`
 }
 
 // getModelList returns the list of available models
 func (s *Server) getModelList() []ModelInfo {
 	modelList := []ModelInfo{}
 	if s.predictableOnly {
-		modelList = append(modelList, ModelInfo{ID: "predictable", Ready: true, MaxContextTokens: 200000})
+		modelList = append(modelList, ModelInfo{ID: "predictable", Ready: true, MaxContextTokens: 200000, SupportsImages: true})
 	} else {
 		modelIDs := s.llmManager.GetAvailableModels()
 		for _, id := range modelIDs {
@@ -2019,10 +2026,19 @@ func (s *Server) getModelList() []ModelInfo {
 			}
 			svc, err := s.llmManager.GetService(id)
 			maxCtx := 0
+			supportsImages := false
 			if err == nil && svc != nil {
 				maxCtx = svc.TokenContextWindow()
+				if c, ok := svc.(imageCapable); ok {
+					supportsImages = c.SupportsImages()
+				} else {
+					// Services that don't expose the capability are assumed
+					// to support images for backwards compatibility, matching
+					// loggingService.SupportsImages.
+					supportsImages = true
+				}
 			}
-			info := ModelInfo{ID: id, Ready: err == nil, MaxContextTokens: maxCtx}
+			info := ModelInfo{ID: id, Ready: err == nil, MaxContextTokens: maxCtx, SupportsImages: supportsImages}
 			// Add display name and source from model info
 			if modelInfo := s.llmManager.GetModelInfo(id); modelInfo != nil {
 				info.DisplayName = modelInfo.DisplayName
