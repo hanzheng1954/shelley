@@ -135,8 +135,7 @@ func Serve(opts ServerOptions) error {
 	}
 	exitCode := int32(0)
 	if waitErr != nil {
-		var ee *exec.ExitError
-		if errors.As(waitErr, &ee) {
+		if ee, ok := errors.AsType[*exec.ExitError](waitErr); ok {
 			exitCode = int32(ee.ExitCode())
 		} else {
 			exitCode = -1
