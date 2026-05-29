@@ -3,13 +3,13 @@ import React, { useEffect, useRef, useState } from "react";
 export type ThinkingLevel = "" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export const THINKING_LEVELS: { value: ThinkingLevel; label: string; hint: string }[] = [
-  { value: "", label: "Default", hint: "Use the model's built-in default" },
-  { value: "off", label: "Off", hint: "No reasoning" },
-  { value: "minimal", label: "Minimal", hint: "~1k tokens" },
-  { value: "low", label: "Low", hint: "~2k tokens" },
-  { value: "medium", label: "Medium", hint: "~8k tokens (default for most providers)" },
-  { value: "high", label: "High", hint: "~16k tokens" },
-  { value: "xhigh", label: "Maximum", hint: "~32k tokens (only some models)" },
+  { value: "", label: "default", hint: "Use the model's built-in default" },
+  { value: "off", label: "off", hint: "No reasoning" },
+  { value: "minimal", label: "minimal", hint: "~1k tokens" },
+  { value: "low", label: "low", hint: "~2k tokens" },
+  { value: "medium", label: "medium", hint: "~8k tokens (default for most providers)" },
+  { value: "high", label: "high", hint: "~16k tokens" },
+  { value: "xhigh", label: "xhigh", hint: "~32k tokens (only some models)" },
 ];
 
 interface ThinkingLevelPickerProps {
@@ -61,9 +61,6 @@ function ThinkingLevelPicker({ value, onChange, disabled = false }: ThinkingLeve
         type="button"
         title={`Reasoning effort: ${current.label} \u2014 ${current.hint}`}
       >
-        <span className="thinking-level-picker-icon" aria-hidden="true">
-          🧠
-        </span>
         <span className="model-picker-value">{current.label}</span>
         <svg
           className={`model-picker-chevron ${isOpen ? "open" : ""}`}

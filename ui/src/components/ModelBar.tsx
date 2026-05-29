@@ -24,8 +24,8 @@ function ModelBar({ model, models = [], thinkingLevel }: ModelBarProps) {
         <span className="model-bar-name">{displayName}</span>
         {thinkingLevel && (
           <>
-            <span className="model-bar-icon" title="Reasoning effort">
-              🧠
+            <span className="model-bar-label" title="Reasoning effort">
+              Reasoning
             </span>
             <span className="model-bar-name">{thinkingLevel}</span>
           </>

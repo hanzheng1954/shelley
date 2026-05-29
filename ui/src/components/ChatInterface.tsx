@@ -2497,11 +2497,10 @@ function ChatInterface({
     ) : !conversationId ? (
       // New conversation — show model picker and cwd selector
       <div className="status-bar-new-conversation">
-        <div
-          className="status-field status-field-model"
-          title="AI model to use for this conversation"
-        >
-          <span className="status-field-label">{t("modelLabel")}</span>
+        <div className="status-field status-field-model">
+          <span className="status-field-label" title="AI model to use for this conversation">
+            {t("modelLabel")}
+          </span>
           <ModelPicker
             models={models}
             selectedModel={selectedModel}
