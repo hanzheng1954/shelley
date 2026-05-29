@@ -56,6 +56,7 @@ import DirectoryPickerModal from "./DirectoryPickerModal";
 import { useVersionChecker } from "./VersionChecker";
 import TerminalPanel, { EphemeralTerminal } from "./TerminalPanel";
 import ModelPicker from "./ModelPicker";
+import ThinkingLevelPicker, { ThinkingLevel } from "./ThinkingLevelPicker";
 import ModelBar from "./ModelBar";
 import SystemPromptView from "./SystemPromptView";
 import {
@@ -729,6 +730,7 @@ interface ChatInterfaceProps {
     conversationType?: "normal" | "orchestrator",
     subagentBackend?: "shelley" | "claude-cli" | "codex-cli",
     toolOverrides?: Record<string, "on" | "off">,
+    thinkingLevel?: Exclude<ThinkingLevel, "">,
   ) => Promise<void>;
   onDistillNewGeneration?: (
     sourceConversationId: string,
@@ -907,6 +909,29 @@ function ChatInterface({
       max_context_tokens?: number;
     }>
   >(window.__SHELLEY_INIT__?.models || []);
+  const THINKING_LEVEL_KEY = "shelley.thinkingLevel";
+  const [thinkingLevel, setThinkingLevelState] = useState<ThinkingLevel>(() => {
+    try {
+      const stored = localStorage.getItem(THINKING_LEVEL_KEY);
+      const valid: ThinkingLevel[] = ["", "off", "minimal", "low", "medium", "high", "xhigh"];
+      if (stored !== null && valid.includes(stored as ThinkingLevel)) {
+        return stored as ThinkingLevel;
+      }
+    } catch {
+      /* ignore */
+    }
+    return "";
+  });
+  const setThinkingLevel = (level: ThinkingLevel) => {
+    setThinkingLevelState(level);
+    try {
+      if (level === "") localStorage.removeItem(THINKING_LEVEL_KEY);
+      else localStorage.setItem(THINKING_LEVEL_KEY, level);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const [selectedModel, setSelectedModelState] = useState<string>(() => {
     // First check localStorage for a sticky model preference
     const storedModel = localStorage.getItem("shelley_selected_model");
@@ -1718,6 +1743,7 @@ function ChatInterface({
       orchestratorOn ? "orchestrator" : undefined,
       orchestratorOn ? subagentBackend : undefined,
       Object.keys(realOverrides).length > 0 ? realOverrides : undefined,
+      thinkingLevel === "" ? undefined : thinkingLevel,
     );
   };
 
@@ -2257,6 +2283,14 @@ function ChatInterface({
           key={`model-bar-${generation}`}
           model={modelsByGeneration.get(generation) || currentConversation?.model}
           models={models}
+          thinkingLevel={(() => {
+            try {
+              const opts = JSON.parse(currentConversation?.conversation_options || "{}");
+              return opts?.thinking_level || null;
+            } catch {
+              return null;
+            }
+          })()}
         />,
       ];
       const systemMessages = systemMessagesByGeneration.get(generation) || [];
@@ -2467,6 +2501,11 @@ function ChatInterface({
             selectedModel={selectedModel}
             onSelectModel={setSelectedModel}
             onManageModels={() => onOpenModelsModal?.()}
+            disabled={sending}
+          />
+          <ThinkingLevelPicker
+            value={thinkingLevel}
+            onChange={setThinkingLevel}
             disabled={sending}
           />
           <div className="advanced-settings-wrapper" ref={advancedSettingsRef}>
