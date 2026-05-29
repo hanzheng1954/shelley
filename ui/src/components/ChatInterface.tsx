@@ -58,7 +58,6 @@ import ModelPicker from "./ModelPicker";
 import ModelBar from "./ModelBar";
 import SystemPromptView from "./SystemPromptView";
 import { toolEmoji, toolHeadline, isAutoExpandTool } from "../utils/toolMeta";
-import { useFeatureFlag } from "../services/featureFlagsStore";
 
 interface ContextUsageBarProps {
   contextWindowSize: number;
@@ -802,7 +801,6 @@ function ChatInterface({
   navigateUserMessageTrigger,
   onConversationUnarchived,
 }: ChatInterfaceProps) {
-  const toolPillsEnabled = useFeatureFlag("tool-pills");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [showLoadingProgressUI, setShowLoadingProgressUI] = useState(false);
@@ -2183,8 +2181,7 @@ function ChatInterface({
         );
       };
       items.forEach((item, index) => {
-        const isPillable =
-          toolPillsEnabled && item.type === "tool" && !isAutoExpandTool(item.toolName);
+        const isPillable = item.type === "tool" && !isAutoExpandTool(item.toolName);
         // Timestamp for non-pill items (or the first pill in a run)
         // emits a divider; once we're inside a pill burst we suppress
         // intermediate timestamps so the row stays visually compact.
