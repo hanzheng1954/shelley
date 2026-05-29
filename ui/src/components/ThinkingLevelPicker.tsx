@@ -2,14 +2,14 @@ import React, { useEffect, useRef, useState } from "react";
 
 export type ThinkingLevel = "" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
-export const THINKING_LEVELS: { value: ThinkingLevel; label: string; hint: string }[] = [
-  { value: "", label: "default", hint: "Use the model's built-in default" },
-  { value: "off", label: "off", hint: "No reasoning" },
-  { value: "minimal", label: "minimal", hint: "~1k tokens" },
-  { value: "low", label: "low", hint: "~2k tokens" },
-  { value: "medium", label: "medium", hint: "~8k tokens (default for most providers)" },
-  { value: "high", label: "high", hint: "~16k tokens" },
-  { value: "xhigh", label: "xhigh", hint: "~32k tokens (only some models)" },
+export const THINKING_LEVELS: { value: ThinkingLevel; label: string }[] = [
+  { value: "", label: "default" },
+  { value: "off", label: "off" },
+  { value: "minimal", label: "minimal" },
+  { value: "low", label: "low" },
+  { value: "medium", label: "medium" },
+  { value: "high", label: "high" },
+  { value: "xhigh", label: "xhigh" },
 ];
 
 interface ThinkingLevelPickerProps {
@@ -59,7 +59,7 @@ function ThinkingLevelPicker({ value, onChange, disabled = false }: ThinkingLeve
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
         type="button"
-        title={`Reasoning effort: ${current.label} \u2014 ${current.hint}`}
+        title={`Reasoning effort: ${current.label}`}
       >
         <span className="model-picker-value">{current.label}</span>
         <svg
@@ -90,7 +90,6 @@ function ThinkingLevelPicker({ value, onChange, disabled = false }: ThinkingLeve
               >
                 <div className="model-picker-option-content">
                   <span className="model-picker-option-name">{level.label}</span>
-                  <span className="model-picker-option-source">{level.hint}</span>
                 </div>
                 {level.value === value && (
                   <svg
