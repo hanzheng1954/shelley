@@ -174,11 +174,28 @@ func (k *KeywordTool) keywordRun(ctx context.Context, input keywordInput) llm.To
 	if err != nil {
 		return llm.ErrorfToolOut("failed to send relevance filtering message: %w", err)
 	}
-	if len(resp.Content) != 1 {
-		return llm.ErrorfToolOut("unexpected number of messages (%d) in relevance filtering response: %v", len(resp.Content), resp.Content)
+	// Find the single text content block. Reasoning models may emit Thinking
+	// blocks alongside the answer; those are fine to discard. Anything else
+	// (or multiple text blocks) is unexpected.
+	var filtered string
+	var found bool
+	for _, c := range resp.Content {
+		switch c.Type {
+		case llm.ContentTypeThinking, llm.ContentTypeRedactedThinking:
+			continue
+		case llm.ContentTypeText:
+			if found {
+				return llm.ErrorfToolOut("multiple text content blocks in relevance filtering response: %v", resp.Content)
+			}
+			filtered = c.Text
+			found = true
+		default:
+			return llm.ErrorfToolOut("unexpected content type %v in relevance filtering response: %v", c.Type, resp.Content)
+		}
 	}
-
-	filtered := resp.Content[0].Text
+	if !found {
+		return llm.ErrorfToolOut("no text content in relevance filtering response: %v", resp.Content)
+	}
 
 	slog.InfoContext(
 		ctx, "keyword search results processed",
@@ -189,7 +206,7 @@ func (k *KeywordTool) keywordRun(ctx context.Context, input keywordInput) llm.To
 		"filtered", filtered,
 	)
 
-	return llm.ToolOut{LLMContent: llm.TextContent(resp.Content[0].Text)}
+	return llm.ToolOut{LLMContent: llm.TextContent(filtered)}
 }
 
 func ripgrep(ctx context.Context, wd string, terms []string) (string, error) {
