@@ -542,6 +542,13 @@ function MessageInput({
     if (e.nativeEvent.isComposing) {
       return;
     }
+    // Escape blurs the textarea, so that follow-up shortcuts like
+    // Cmd+ArrowDown (scroll conversation to bottom) work without
+    // having to click out of the input first.
+    if (e.key === "Escape") {
+      textareaRef.current?.blur();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       // On mobile, let Enter create newlines since there's a send button
       // I'm not convinced the divergence from desktop is the correct answer,
