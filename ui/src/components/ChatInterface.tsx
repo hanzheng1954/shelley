@@ -59,7 +59,16 @@ import TerminalPanel, { EphemeralTerminal } from "./TerminalPanel";
 import ModelPicker from "./ModelPicker";
 import ModelBar from "./ModelBar";
 import SystemPromptView from "./SystemPromptView";
-import { toolEmoji, toolHeadline, isAutoExpandTool } from "../utils/toolMeta";
+import {
+  toolEmoji,
+  toolHeadline,
+  isAutoExpandTool,
+  HEADLINE_BUDGET_WIDE,
+  HEADLINE_BUDGET_NARROW,
+  toolDisplayName,
+} from "../utils/toolMeta";
+import Modal from "./Modal";
+import { ToolDetailContext, useInToolDetail } from "./ToolDetailContext";
 import { useFeatureFlag } from "../services/featureFlagsStore";
 
 interface ContextUsageBarProps {
@@ -328,6 +337,9 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
   onCommentTextChange,
   streamingOutput,
 }: CoalescedToolCallProps) {
+  // In the pill detail modal the generic fallback's <details> summary is
+  // hidden, so force it open (CSS can't reliably open a <details>).
+  const inToolDetail = useInToolDetail();
   // Calculate execution time if available
   let executionTime = "";
   if (hasResult && toolStartTime && toolEndTime) {
@@ -418,7 +430,10 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
   return (
     <div className="message message-tool" data-testid="tool-call-completed">
       <div className="message-content">
-        <details className={`tool-result-details ${toolError ? "error" : ""}`}>
+        <details
+          className={`tool-result-details ${toolError ? "error" : ""}`}
+          open={inToolDetail || undefined}
+        >
           <summary className="tool-result-summary">
             <div className="tool-result-meta">
               <div className="flex items-center space-x-2">
@@ -484,14 +499,29 @@ const CoalescedToolCall = React.memo(function CoalescedToolCall({
   );
 });
 
+// Headline character budget keyed to viewport width. Desktop affords
+// wider pills; mobile keeps them short. Re-evaluates on resize.
+function useHeadlineBudget(): number {
+  const query = "(max-width: 600px)";
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== "undefined" ? window.matchMedia(query).matches : false,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  return narrow ? HEADLINE_BUDGET_NARROW : HEADLINE_BUDGET_WIDE;
+}
+
 // A single tool call rendered as a compact, color-coded "pill":
 // emoji + short headline + (optional) running spinner. Clicking a
-// pill expands the full CoalescedToolCall card inline beneath the
-// pill row (no modal) — clicking the pill again collapses it.
+// pill opens the full CoalescedToolCall detail in a modal dialog.
 //
 // Mirrors iOS/exe.dev/ToolPillsRow.swift so the desktop and iOS
-// clients have the same visual grammar for tool activity, but
-// stays in the conversation flow rather than presenting a sheet.
+// clients have the same visual grammar for tool activity.
 interface ToolPillsRowProps {
   items: CoalescedItem[]; // all of type "tool"
   onCommentTextChange?: (text: string) => void;
@@ -503,26 +533,77 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
   onCommentTextChange,
   toolProgress,
 }: ToolPillsRowProps) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const toggle = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-  const expandedItems = items.filter((i) => i.toolUseId && expanded.has(i.toolUseId));
+  // Which pill's detail is open in the modal (by toolUseId), or null.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Headline character budget: desktop gets more room than mobile so
+  // the same command surfaces more of its meaningful tokens.
+  const budget = useHeadlineBudget();
+  const selected = items.find((i) => i.toolUseId && i.toolUseId === selectedId) || null;
+  const selectedName = selected?.toolName || "tool";
+  // Build a small, muted status descriptor for the detail modal header.
+  // Duration is computed the same way CoalescedToolCall does.
+  let statusRight: React.ReactNode = null;
+  if (selected) {
+    const running = !selected.hasResult;
+    // A cancelled tool reports an error whose result text carries the
+    // cancellation marker (same signal BashTool uses); surface it as a
+    // distinct, calmer state rather than a generic failure.
+    const resultText = selected.toolResult?.[0]?.Text ?? "";
+    const cancelled =
+      !!selected.toolError &&
+      selected.hasResult &&
+      resultText.includes("Tool execution cancelled by user");
+    const failed = !!selected.toolError && selected.hasResult && !cancelled;
+    let duration = "";
+    if (selected.hasResult && selected.toolStartTime && selected.toolEndTime) {
+      const diffMs =
+        new Date(selected.toolEndTime).getTime() - new Date(selected.toolStartTime).getTime();
+      duration = diffMs < 1000 ? `${diffMs}ms` : `${(diffMs / 1000).toFixed(1)}s`;
+    }
+    const state = running ? "running" : cancelled ? "cancelled" : failed ? "failed" : "success";
+    statusRight = (
+      <div className={`tool-detail-status tool-detail-status--${state}`}>
+        {running ? (
+          <>
+            <span className="tool-detail-status-spinner" aria-hidden="true" />
+            <span className="tool-detail-status-label">Running</span>
+          </>
+        ) : cancelled ? (
+          <>
+            <span className="tool-detail-status-glyph" aria-hidden="true">
+              ✗
+            </span>
+            <span className="tool-detail-status-label">Cancelled</span>
+          </>
+        ) : failed ? (
+          <>
+            <span className="tool-detail-status-glyph" aria-hidden="true">
+              ✗
+            </span>
+            <span className="tool-detail-status-label">Failed</span>
+          </>
+        ) : (
+          <>
+            <span className="tool-detail-status-glyph" aria-hidden="true">
+              ✓
+            </span>
+            <span className="tool-detail-status-label">Success</span>
+          </>
+        )}
+        {duration && <span className="tool-detail-status-time">{duration}</span>}
+      </div>
+    );
+  }
   return (
     <div className="message message-tool tool-pills-row-wrap">
       <div className="message-content">
         <ul className="tool-pills-row">
           {items.map((item, idx) => {
             const name = item.toolName || "tool";
-            const headline = toolHeadline(name, item.toolInput);
+            const headline = toolHeadline(name, item.toolInput, budget);
             const running = !item.hasResult;
             const errored = !!item.toolError && item.hasResult;
-            const isExpanded = !!item.toolUseId && expanded.has(item.toolUseId);
+            const isExpanded = !!item.toolUseId && item.toolUseId === selectedId;
             const stateSuffix = running ? ", running" : errored ? ", failed" : "";
             // toolHeadline already includes the tool name when relevant
             // (e.g. "browser: screenshot"), so we don't add another prefix.
@@ -533,9 +614,10 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
                 <button
                   type="button"
                   className={`tool-pill${errored ? " tool-pill--error" : ""}${isExpanded ? " tool-pill--expanded" : ""}`}
-                  onClick={() => item.toolUseId && toggle(item.toolUseId)}
+                  onClick={() => item.toolUseId && setSelectedId(item.toolUseId)}
                   disabled={!item.toolUseId}
                   aria-label={`${label}${stateSuffix}`}
+                  aria-haspopup="dialog"
                   aria-expanded={isExpanded}
                   title={label}
                   data-testid={running ? "tool-call-running" : "tool-call-completed"}
@@ -556,32 +638,34 @@ const ToolPillsRow = React.memo(function ToolPillsRow({
             );
           })}
         </ul>
-        {expandedItems.length > 0 && (
-          <div className="tool-pill-expanded-list">
-            {expandedItems.map((item) => (
-              <div
-                key={item.toolUseId}
-                className="tool-pill-expanded"
-                data-tool-name={item.toolName || "tool"}
-              >
+        <Modal
+          isOpen={!!selected}
+          onClose={() => setSelectedId(null)}
+          title={selected ? toolDisplayName(selectedName) : ""}
+          titleRight={statusRight}
+          className="tool-detail-modal"
+        >
+          {selected && (
+            <div className="tool-pill-expanded" data-tool-name={selectedName}>
+              <ToolDetailContext.Provider value={{ defaultExpanded: true }}>
                 <CoalescedToolCall
-                  toolName={item.toolName || "Unknown Tool"}
-                  toolInput={item.toolInput}
-                  toolResult={item.toolResult}
-                  toolError={item.toolError}
-                  toolStartTime={item.toolStartTime}
-                  toolEndTime={item.toolEndTime}
-                  hasResult={item.hasResult}
-                  display={item.display}
+                  toolName={selected.toolName || "Unknown Tool"}
+                  toolInput={selected.toolInput}
+                  toolResult={selected.toolResult}
+                  toolError={selected.toolError}
+                  toolStartTime={selected.toolStartTime}
+                  toolEndTime={selected.toolEndTime}
+                  hasResult={selected.hasResult}
+                  display={selected.display}
                   onCommentTextChange={onCommentTextChange}
                   streamingOutput={
-                    item.toolUseId ? toolProgress[item.toolUseId]?.output : undefined
+                    selected.toolUseId ? toolProgress[selected.toolUseId]?.output : undefined
                   }
                 />
-              </div>
-            ))}
-          </div>
-        )}
+              </ToolDetailContext.Provider>
+            </div>
+          )}
+        </Modal>
       </div>
     </div>
   );

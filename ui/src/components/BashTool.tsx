@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState, useInToolDetail } from "./ToolDetailContext";
 import AnsiText from "./AnsiText";
 
 // Display data from the bash tool backend
@@ -35,7 +36,7 @@ function BashTool({
   streamingOutput,
 }: BashToolProps) {
   // Details panel (command, full output) — collapsed by default, stays collapsed after completion.
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
   // Streaming preview — expanded to show full streaming output (beyond PREVIEW_LINES).
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const previewRef = React.useRef<HTMLPreElement>(null);
@@ -43,14 +44,16 @@ function BashTool({
 
   // Collapse details when tool completes (if we auto-expanded for streaming,
   // the user sees the preview instead, so the details panel should close).
+  // In the detail modal the card must stay open, so skip the auto-collapse.
+  const inToolDetail = useInToolDetail();
   const prevRunning = React.useRef(isRunning);
   React.useEffect(() => {
-    if (prevRunning.current && !isRunning) {
+    if (prevRunning.current && !isRunning && !inToolDetail) {
       setIsExpanded(false);
       setPreviewExpanded(false);
     }
     prevRunning.current = isRunning;
-  }, [isRunning]);
+  }, [isRunning, inToolDetail]);
 
   // Auto-scroll streaming output to bottom (whichever ref is active).
   React.useEffect(() => {

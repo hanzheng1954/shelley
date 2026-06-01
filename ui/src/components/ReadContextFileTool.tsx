@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface ReadContextFileToolProps {
   // For tool_use (pending state)
@@ -19,7 +20,7 @@ function ReadContextFileTool({
   hasError,
   executionTime,
 }: ReadContextFileToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Extract path from toolInput
   const path =

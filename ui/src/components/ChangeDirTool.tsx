@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface ChangeDirToolProps {
   // For tool_use (pending state)
@@ -19,7 +20,7 @@ function ChangeDirTool({
   hasError,
   executionTime,
 }: ChangeDirToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Extract path from toolInput
   const path =

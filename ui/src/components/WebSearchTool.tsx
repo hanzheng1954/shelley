@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface WebSearchToolProps {
   toolInput?: unknown;
@@ -29,7 +30,7 @@ function WebSearchResultItem({ result }: { result: LLMContent }) {
 }
 
 function WebSearchTool({ toolInput, isRunning, searchResults, toolResult }: WebSearchToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Anthropic sends {"query": "..."}; OpenAI Responses sends {"queries": [...]}
   let queries: string[] = [];

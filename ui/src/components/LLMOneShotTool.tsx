@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface LLMOneShotToolProps {
   toolInput?: unknown; // { prompt_file: string, output_file?: string, model?: string, system_prompt?: string }
@@ -16,7 +17,7 @@ function LLMOneShotTool({
   hasError,
   executionTime,
 }: LLMOneShotToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   const input =
     typeof toolInput === "object" && toolInput !== null

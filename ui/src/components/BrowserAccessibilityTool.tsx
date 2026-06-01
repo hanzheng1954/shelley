@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface BrowserAccessibilityToolProps {
   toolInput?: unknown;
@@ -16,7 +17,7 @@ function BrowserAccessibilityTool({
   hasError,
   executionTime,
 }: BrowserAccessibilityToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   const input =
     typeof toolInput === "object" && toolInput !== null

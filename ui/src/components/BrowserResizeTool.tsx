@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface BrowserResizeToolProps {
   toolInput?: unknown; // { width: number, height: number }
@@ -16,7 +17,7 @@ function BrowserResizeTool({
   hasError,
   executionTime,
 }: BrowserResizeToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Extract dimensions from toolInput
   const width =

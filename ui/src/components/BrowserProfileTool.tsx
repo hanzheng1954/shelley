@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface BrowserProfileToolProps {
   toolInput?: unknown;
@@ -16,7 +17,7 @@ function BrowserProfileTool({
   hasError,
   executionTime,
 }: BrowserProfileToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
   const [copied, setCopied] = useState(false);
 
   const input =

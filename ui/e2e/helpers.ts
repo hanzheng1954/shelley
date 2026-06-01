@@ -137,47 +137,34 @@ export async function createConversationViaAPI(
 /** Click the pill for the first tool call whose visible text matches
  *  `hasText` and wait for its inline expansion to appear. Returns the
  *  expanded card locator (scope for further assertions). */
-export async function openToolPill(
-  page: Page,
-  hasText: string | RegExp,
-): Promise<Locator> {
+export async function openToolPill(page: Page, hasText: string | RegExp): Promise<Locator> {
   const pill = page.locator(".tool-pill").filter({ hasText }).first();
   await pill.click();
-  // The expanded card is a sibling, inside the same row's content.
-  const row = pill.locator("xpath=ancestor::*[contains(@class,'tool-pills-row-wrap')][1]");
-  const expanded = row.locator(".tool-pill-expanded").first();
+  // The detail opens in a modal dialog (.tool-detail-modal).
+  const expanded = page.locator(".tool-detail-modal .tool-pill-expanded").first();
   await expect(expanded).toBeVisible({ timeout: 5000 });
   return expanded;
 }
 
-/** Collapse the currently-expanded tool card. Pass the same `hasText`
- *  used to open it; clicking the pill again toggles it off. */
-export async function closeToolModal(page: Page, hasText?: string | RegExp) {
-  if (hasText !== undefined) {
-    const pill = page.locator(".tool-pill").filter({ hasText }).first();
-    await pill.click();
-    const row = pill.locator("xpath=ancestor::*[contains(@class,'tool-pills-row-wrap')][1]");
-    await expect(row.locator(".tool-pill-expanded")).toHaveCount(0, { timeout: 5000 });
-    return;
+/** Close the currently-open tool detail modal. The `hasText` argument
+ *  is accepted for backwards-compat but ignored — the modal closes the
+ *  same way regardless of which pill opened it. */
+export async function closeToolModal(page: Page, _hasText?: string | RegExp) {
+  void _hasText;
+  const closeBtn = page.locator(".tool-detail-modal .modal-header .btn-icon");
+  if ((await closeBtn.count()) > 0) {
+    await closeBtn.first().click();
+  } else {
+    await page.keyboard.press("Escape");
   }
-  // Backwards-compat: collapse every expanded pill on the page.
-  const expandedPills = page.locator(".tool-pill[aria-expanded='true']");
-  const count = await expandedPills.count();
-  for (let i = count - 1; i >= 0; i--) {
-    await expandedPills.nth(i).click();
-  }
-  await expect(page.locator(".tool-pill-expanded")).toHaveCount(0, { timeout: 5000 });
+  await expect(page.locator(".tool-detail-modal")).toHaveCount(0, { timeout: 5000 });
 }
 
 /** Override a boolean feature flag for THIS page only (via localStorage).
  *  Call before the first `page.goto(...)` so the override is in place when
  *  the React app first reads the flag. Per-page scope means parallel
  *  workers can disagree on the same flag without racing on the global DB. */
-export async function setPageFeatureFlag(
-  page: Page,
-  name: string,
-  value: boolean,
-): Promise<void> {
+export async function setPageFeatureFlag(page: Page, name: string, value: boolean): Promise<void> {
   await page.addInitScript(
     ([n, v]) => {
       try {

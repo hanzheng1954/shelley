@@ -1370,11 +1370,9 @@ button {
   color: var(--text-primary);
 }
 
-.tool-code.error {
-  background: var(--error-bg);
-  border-color: var(--error-border);
-  color: var(--error-text);
-}
+/* Error output is signalled by the ✗ status icon in the header, not by
+ * painting the whole output box red, so `.tool-code.error` carries no
+ * styling (it intentionally renders like a normal code block). */
 
 /* Bash Tool Component - uses shared tool styles */
 .bash-tool {
@@ -1529,11 +1527,7 @@ button {
   color: var(--text-primary);
 }
 
-.bash-tool-code.error {
-  background: var(--error-bg);
-  border-color: var(--error-border);
-  color: var(--error-text);
-}
+/* See note on .tool-code.error: error output boxes get no red fill. */
 
 .bash-tool-streaming {
   max-height: 300px;
@@ -10488,7 +10482,9 @@ kbd {
 .tool-pill-text {
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  max-width: 240px;
+  /* Desktop affords wider pills; the headline budget in toolMeta.ts
+   * already picks how much text to surface, this is the visual guard. */
+  max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -10511,16 +10507,16 @@ kbd {
 }
 
 .tool-pill-err {
-  color: var(--error-text);
+  /* Exit-code/error is a low-priority signal: a small muted glyph, not a
+   * red chip. The pill keeps its neutral background (see .tool-pill--error). */
+  color: var(--text-secondary);
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
 }
 
-.tool-pill--error {
-  --tp-bg: var(--error-bg);
-  --tp-border: var(--error-border);
-}
+/* Errored pills keep the normal neutral chip styling; the small muted
+ * ✗ glyph is the only differentiator. No red overrides here. */
 
 /* No per-tool tint on the web. Web's tool widgets are monochrome
  * with a single blue accent, and a rainbow row of pills clashes
@@ -10551,6 +10547,161 @@ kbd {
 
 @media (max-width: 600px) {
   .tool-pill-text {
-    max-width: 160px;
+    max-width: 150px;
   }
+}
+
+/* ============================================================
+ * Tool detail modal: a WIDE, FLAT detail view for the
+ * CoalescedToolCall card shown in a dialog when a pill is clicked.
+ *
+ * The inline (non-modal) tool cards are a gray rounded card with their
+ * own clickable header. Inside the modal that produces ugly
+ * double-boxing and shows the command up to three times. Everything
+ * below is scoped to .tool-detail-modal so the inline cards are
+ * untouched: we flatten the card, hide its header (the modal title
+ * + status strip name the tool and its result), and let the boxed
+ * sections sit directly on the flat modal background.
+ * ============================================================ */
+.tool-detail-modal {
+  width: min(960px, 94vw);
+  max-width: 94vw;
+}
+
+.tool-detail-modal .tool-pill-expanded > .message-tool {
+  margin: 0;
+}
+
+/* Flatten the outer card: no gray card-within-card. */
+.tool-detail-modal .bash-tool,
+.tool-detail-modal .tool {
+  background: none;
+  margin: 0;
+}
+
+.dark .tool-detail-modal .bash-tool,
+.dark .tool-detail-modal .tool {
+  background: none;
+}
+
+/* Hide the card's own header entirely: the modal title names the tool
+ * and the titleRight status strip carries result + duration, so the
+ * card header (command line, cwd, duplicate status, chevron) is
+ * redundant. */
+.tool-detail-modal .bash-tool-header,
+.tool-detail-modal .tool-header {
+  display: none;
+}
+
+/* Align the body to the modal padding (the modal-body already pads). */
+.tool-detail-modal .bash-tool-details,
+.tool-detail-modal .tool-details {
+  padding: 0;
+  gap: 1rem;
+}
+
+/* Polish the code/pre boxes so they look intentional on the flat
+ * background: comfortable padding, subtle rounded border, readable
+ * line-height, and scroll when content is large. */
+.tool-detail-modal .bash-tool-code,
+.tool-detail-modal .tool-code {
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  line-height: 1.55;
+  /* The modal body is the single scroll container — don't cap the box
+   * height or add a nested overflow, otherwise long output produces two
+   * scrollbars (inner box + modal body). Let it grow and scroll the body. */
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/* Fallback render path: unmapped tools (no entry in TOOL_COMPONENTS) use
+ * the generic .tool-result-details card. Flatten it the same way and
+ * strip the red error tint so it matches the specialised tool cards. */
+.tool-detail-modal .tool-result-details,
+.tool-detail-modal .tool-result-details.error {
+  border: none;
+  margin: 0;
+}
+
+.tool-detail-modal .tool-result-summary {
+  display: none;
+}
+
+.tool-detail-modal .tool-result-content {
+  padding: 0;
+}
+
+.tool-detail-modal .tool-result-section.error.output,
+.tool-detail-modal .tool-result-section.output,
+.tool-detail-modal .tool-result-section {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+}
+
+.tool-detail-modal .tool-result-section.error.output .tool-result-label {
+  color: var(--text-secondary);
+}
+
+/* Specialised tool error messages (screenshot/screencast/output-iframe)
+ * paint a red box inline; inside the detail modal we keep the rest of the
+ * surface neutral, so render these as ordinary code blocks too. */
+.tool-detail-modal .screenshot-tool-error-message,
+.tool-detail-modal .screencast-tool-error-message,
+.tool-detail-modal .output-iframe-tool-error-message {
+  background: var(--bg-base);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------
+ * Status strip (Modal titleRight): a small, muted badge with the
+ * run state and execution duration. Tasteful and monochrome — even
+ * a failure is just a soft ✗, never a red banner.
+ * ------------------------------------------------------------ */
+.tool-detail-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.tool-detail-status-label {
+  font-weight: 500;
+}
+
+.tool-detail-status-glyph {
+  font-weight: 600;
+}
+
+.tool-detail-status--success .tool-detail-status-glyph {
+  color: var(--success-text);
+}
+
+/* Failure and cancellation stay muted — the ✗ reads as secondary text,
+ * not an alarm. */
+.tool-detail-status--failed .tool-detail-status-glyph,
+.tool-detail-status--failed .tool-detail-status-label,
+.tool-detail-status--cancelled .tool-detail-status-glyph,
+.tool-detail-status--cancelled .tool-detail-status-label {
+  color: var(--text-secondary);
+}
+
+.tool-detail-status-time {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.tool-detail-status-spinner {
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid var(--text-secondary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: tool-pill-spin 0.8s linear infinite;
+  flex-shrink: 0;
 }

@@ -61,7 +61,12 @@ test.describe('Conversation Cancellation', () => {
     // reveal the BashTool card inside the modal).
     {
       const modal = await openToolPill(page, 'sleep');
-      await expect(modal.locator('.bash-tool .bash-tool-cancelled')).toBeVisible({ timeout: 5000 });
+      // The card header is hidden in the modal; the cancelled state shows
+      // in the modal's status strip and the BashTool card is present.
+      await expect(modal.locator('.bash-tool')).toBeVisible({ timeout: 5000 });
+      await expect(
+        page.locator('.tool-detail-modal .tool-detail-status--cancelled'),
+      ).toBeVisible({ timeout: 5000 });
       await closeToolModal(page);
     }
 
@@ -86,7 +91,10 @@ test.describe('Conversation Cancellation', () => {
     // The cancelled messages should still be visible (open the pill).
     {
       const modal = await openToolPill(page, 'sleep');
-      await expect(modal.locator('.bash-tool .bash-tool-cancelled')).toBeVisible();
+      await expect(modal.locator('.bash-tool')).toBeVisible();
+      await expect(
+        page.locator('.tool-detail-modal .tool-detail-status--cancelled'),
+      ).toBeVisible();
       await closeToolModal(page);
     }
     await expect(page.locator('.messages-container').locator('text=/\\[Operation cancelled\\]/i')).toBeVisible();

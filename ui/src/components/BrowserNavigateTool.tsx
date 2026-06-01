@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface BrowserNavigateToolProps {
   toolInput?: unknown; // { url: string }
@@ -16,7 +17,7 @@ function BrowserNavigateTool({
   hasError,
   executionTime,
 }: BrowserNavigateToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Extract URL from toolInput
   const url =

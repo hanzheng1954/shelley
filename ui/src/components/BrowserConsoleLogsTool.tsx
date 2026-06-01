@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface BrowserConsoleLogsToolProps {
   toolName: string; // to distinguish between recent and clear
@@ -17,7 +18,7 @@ function BrowserConsoleLogsTool({
   hasError,
   executionTime,
 }: BrowserConsoleLogsToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Extract output from toolResult
   const output =

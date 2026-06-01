@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { useEscapeClose } from "./useEscapeClose";
 
 interface ModalProps {
@@ -21,7 +22,7 @@ function Modal({ isOpen, onClose, title, titleRight, children, className }: Moda
     }
   };
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={handleBackdropClick}>
       <div className={`modal ${className || ""}`}>
         {/* Header */}
@@ -43,7 +44,8 @@ function Modal({ isOpen, onClose, title, titleRight, children, className }: Moda
         {/* Content */}
         <div className="modal-body">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

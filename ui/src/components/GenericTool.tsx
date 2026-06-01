@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface GenericToolProps {
   toolName: string;
@@ -22,7 +23,7 @@ function GenericTool({
   hasError,
   executionTime,
 }: GenericToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Format data for display
   const formatData = (data: unknown): string => {

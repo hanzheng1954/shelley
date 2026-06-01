@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { LLMContent } from "../types";
+import { useToolExpandedState } from "./ToolDetailContext";
 
 interface SubagentToolProps {
   // For tool_use (pending state)
@@ -21,7 +22,7 @@ function SubagentTool({
   executionTime,
   displayData,
 }: SubagentToolProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useToolExpandedState();
 
   // Extract fields from toolInput
   const input =

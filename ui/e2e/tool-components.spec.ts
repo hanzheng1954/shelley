@@ -66,15 +66,21 @@ test.describe('Tool Component Verification', () => {
     await verifyPill('bash', null, async (modal) => {
       const t = modal.locator('.bash-tool').filter({ hasText: "echo 'hello from bash'" });
       await expect(t).toBeVisible();
-      await expect(t.locator('.bash-tool-emoji')).toBeVisible();
-      await expect(t.locator('.bash-tool-command')).toBeVisible();
+      // In the detail modal the disclosure header is hidden (the modal title
+      // is the headline); the command shows in the expanded Command section.
+      await expect(t.locator('.bash-tool-details')).toBeVisible();
+      await expect(
+        t.locator('.bash-tool-code').filter({ hasText: "echo 'hello from bash'" }).first(),
+      ).toBeVisible();
     });
 
     await verifyPill('shell', null, async (modal) => {
       const t = modal.locator('.bash-tool').filter({ hasText: "echo 'hello from shell'" });
       await expect(t).toBeVisible();
-      await expect(t.locator('.bash-tool-emoji')).toBeVisible();
-      await expect(t.locator('.bash-tool-command')).toBeVisible();
+      await expect(t.locator('.bash-tool-details')).toBeVisible();
+      await expect(
+        t.locator('.bash-tool-code').filter({ hasText: "echo 'hello from shell'" }).first(),
+      ).toBeVisible();
     });
 
     // Thinking content appears inline (no pill).
@@ -102,31 +108,31 @@ test.describe('Tool Component Verification', () => {
     // Spot-check the rest of the pill set. Each pill's specialized
     // component must render inside its modal.
     await verifyPill('keyword_search', null, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🔍' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🔍' }).first()).toBeAttached();
     });
     await verifyPill('browser', 'https://example.com', async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🌐' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🌐' }).first()).toBeAttached();
     });
     await verifyPill('browser', /\beval\b/, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '⚡' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '⚡' }).first()).toBeAttached();
     });
     await verifyPill('browser', 'console_logs', async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📋' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📋' }).first()).toBeAttached();
     });
     await verifyPill('browser_emulate', null, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📱' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📱' }).first()).toBeAttached();
     });
     await verifyPill('browser_network', null, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📡' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📡' }).first()).toBeAttached();
     });
     await verifyPill('browser_accessibility', null, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '♿' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '♿' }).first()).toBeAttached();
     });
     await verifyPill('browser_profile', null, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📊' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📊' }).first()).toBeAttached();
     });
     await verifyPill('llm_one_shot', null, async (modal) => {
-      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🤖' }).first()).toBeVisible();
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '🤖' }).first()).toBeAttached();
     });
 
     // No pill should be rendered with the GenericTool gear emoji.
@@ -146,10 +152,15 @@ test.describe('Tool Component Verification', () => {
     const modal = page.locator('.tool-pill-expanded');
     await expect(modal).toBeVisible();
 
-    // Verify bash tool shows the command in the header (collapsed state)
+    // The detail modal opens already expanded; the disclosure header is
+    // hidden, so the command shows in the details body's Command section.
     const bashToolWithOurCommand = modal.locator('.bash-tool').filter({ hasText: 'unique-test-command-xyz123' });
     await expect(bashToolWithOurCommand).toBeVisible();
-    const commandElement = bashToolWithOurCommand.locator('.bash-tool-command');
+    await expect(bashToolWithOurCommand.locator('.bash-tool-details')).toBeVisible();
+    const commandElement = bashToolWithOurCommand
+      .locator('.bash-tool-code')
+      .filter({ hasText: 'unique-test-command-xyz123' })
+      .first();
     await expect(commandElement).toBeVisible();
     const commandText = await commandElement.textContent();
     expect(commandText).toContain('unique-test-command-xyz123');
@@ -194,7 +205,11 @@ test.describe('Tool Component Verification', () => {
     await navigatePill.scrollIntoViewIfNeeded();
     await navigatePill.click();
     const navigateModal = page.locator('.tool-pill-expanded');
-    await expect(navigateModal.locator('.tool .tool-command').filter({ hasText: 'https://example.com' })).toBeVisible();
+    // The card header is hidden in the modal; the URL shows in the details
+    // body's URL section (rendered as a link inside .tool-code).
+    await expect(
+      navigateModal.locator('.tool-code').filter({ hasText: 'https://example.com' }).first(),
+    ).toBeVisible();
     await closeToolModal(page);
   });
 

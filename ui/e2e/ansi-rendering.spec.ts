@@ -19,7 +19,6 @@ test.describe('ANSI escape sequence rendering', () => {
     const modal = await openToolPill(page, 'printf');
     const bashTool = modal.locator('.bash-tool');
     await expect(bashTool).toBeVisible({ timeout: 15000 });
-    await bashTool.locator('.bash-tool-header').click();
     const details = bashTool.locator('.bash-tool-details');
     await expect(details).toBeVisible();
 
@@ -83,7 +82,6 @@ test.describe('ANSI escape sequence rendering', () => {
     const modal = await openToolPill(page, 'echo');
     const bashTool = modal.locator('.bash-tool').filter({ hasText: 'just plain text with no escapes' }).first();
     await expect(bashTool).toBeVisible({ timeout: 15000 });
-    await bashTool.locator('.bash-tool-header').click();
     const details = bashTool.locator('.bash-tool-details');
     await expect(details).toBeVisible();
 
