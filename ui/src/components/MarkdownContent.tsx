@@ -58,8 +58,10 @@ function MarkdownContent({ text }: MarkdownContentProps) {
         "input",
         "span",
         "div",
+        "details",
+        "summary",
       ],
-      ALLOWED_ATTR: ["href", "target", "rel", "type", "checked", "disabled", "class"],
+      ALLOWED_ATTR: ["href", "target", "rel", "type", "checked", "disabled", "class", "open"],
     });
   }, [text]);
 

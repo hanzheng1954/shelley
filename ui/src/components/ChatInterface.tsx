@@ -28,7 +28,6 @@ import DiffViewer from "./DiffViewer";
 import { focusMessageInputIfUnfocused } from "../utils/focusMessageInput";
 import MessageSelectionToolbar from "./MessageSelectionToolbar";
 import { buildMessageQuote } from "../utils/messageQuote";
-import { openConversationExport } from "../utils/exportConversation";
 import { tildifyPath } from "../utils/tildify";
 import { handleModifiedNavClick } from "../utils/openInNewTab";
 import GitGraphViewer from "./GitGraphViewer";
@@ -2868,7 +2867,10 @@ function ChatInterface({
                     <button
                       onClick={() => {
                         setShowOverflowMenu(false);
-                        openConversationExport(currentConversation, messages);
+                        // Open the dedicated /export/<id> page in a new tab.
+                        // It's a real route (bookmarkable, refreshable) that
+                        // fetches the conversation and renders the editor.
+                        window.open(`/export/${conversationId}`, "_blank", "noopener");
                       }}
                       className="overflow-menu-item"
                     >
