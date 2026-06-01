@@ -148,20 +148,18 @@ func NewLLMServiceManager(cfg *LLMConfig) LLMProvider {
 func toAPIMessages(messages []generated.Message) []APIMessage {
 	apiMessages := make([]APIMessage, len(messages))
 	for i, msg := range messages {
-		var endOfTurnPtr *bool
-		if msg.LlmData != nil && msg.Type == string(db.MessageTypeAgent) {
-			if endOfTurn, ok := extractEndOfTurn(*msg.LlmData); ok {
-				endOfTurnCopy := endOfTurn
-				endOfTurnPtr = &endOfTurnCopy
-			}
-		}
+		// llmData and endOfTurn both come from a single parse of llm_data
+		// (see llmDataForAPI). On big conversations this loop runs over every
+		// message in the history, so parsing the JSON once instead of once
+		// per concern (image stripping + end-of-turn) is a meaningful saving.
+		llmData, endOfTurnPtr := llmDataForAPI(msg.LlmData, msg.Type, msg.MessageID)
 
 		apiMsg := APIMessage{
 			MessageID:      msg.MessageID,
 			ConversationID: msg.ConversationID,
 			SequenceID:     msg.SequenceID,
 			Type:           msg.Type,
-			LlmData:        stripImageDataFromLLMData(msg.LlmData, msg.MessageID),
+			LlmData:        llmData,
 			UserData:       msg.UserData,
 			UsageData:      msg.UsageData,
 			CreatedAt:      msg.CreatedAt,
@@ -172,6 +170,41 @@ func toAPIMessages(messages []generated.Message) []APIMessage {
 		apiMessages[i] = apiMsg
 	}
 	return apiMessages
+}
+
+// llmDataForAPI prepares a message's llm_data for the API in a single JSON
+// parse, returning the (possibly image-stripped) data plus the end-of-turn
+// flag for agent messages. It combines what stripImageDataFromLLMData and
+// extractEndOfTurn did separately, each of which unmarshalled the full
+// message; doing it once halves the JSON work in the per-conversation
+// backfill, which dominates stream connect time for long conversations.
+//
+// On any parse error it falls back to returning llm_data unchanged with no
+// end-of-turn flag, matching the prior helpers' lenient behavior.
+func llmDataForAPI(llmData *string, msgType, messageID string) (*string, *bool) {
+	if llmData == nil {
+		return nil, nil
+	}
+	var msg llm.Message
+	if err := json.Unmarshal([]byte(*llmData), &msg); err != nil {
+		return llmData, nil
+	}
+
+	var endOfTurnPtr *bool
+	if msgType == string(db.MessageTypeAgent) {
+		eot := msg.EndOfTurn
+		endOfTurnPtr = &eot
+	}
+
+	if !stripImageDataFromContents(msg.Content, messageID) {
+		return llmData, endOfTurnPtr
+	}
+	stripped, err := json.Marshal(msg)
+	if err != nil {
+		return llmData, endOfTurnPtr
+	}
+	s := string(stripped)
+	return &s, endOfTurnPtr
 }
 
 func extractEndOfTurn(raw string) (bool, bool) {

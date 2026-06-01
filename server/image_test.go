@@ -319,3 +319,73 @@ func TestHandleMessageImage(t *testing.T) {
 		t.Errorf("expected 404 for nonexistent message, got %d", resp3.StatusCode)
 	}
 }
+
+// TestLlmDataForAPISingleParse verifies that llmDataForAPI computes both the
+// end-of-turn flag (for agent messages) and the image-stripped llm_data in a
+// single JSON parse, matching the behavior of the previously-separate
+// extractEndOfTurn and stripImageDataFromLLMData helpers.
+func TestLlmDataForAPISingleParse(t *testing.T) {
+	t.Parallel()
+
+	msg := llm.Message{
+		Role:      llm.MessageRoleAssistant,
+		EndOfTurn: true,
+		Content: []llm.Content{
+			{Type: llm.ContentTypeText, Text: "here is a screenshot"},
+			{Type: llm.ContentTypeText, MediaType: "image/png", Data: strings.Repeat("x", 1000)},
+		},
+	}
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(data)
+
+	// Agent message: end_of_turn pointer populated, image data stripped.
+	gotData, gotEOT := llmDataForAPI(&s, string(db.MessageTypeAgent), "msg-eot")
+	if gotEOT == nil || *gotEOT != true {
+		t.Fatalf("expected end_of_turn=true, got %v", gotEOT)
+	}
+	if gotData == nil {
+		t.Fatal("expected non-nil llm_data")
+	}
+	if len(*gotData) >= len(s) {
+		t.Errorf("expected stripped data smaller than input, got %d >= %d", len(*gotData), len(s))
+	}
+	var parsed llm.Message
+	if err := json.Unmarshal([]byte(*gotData), &parsed); err != nil {
+		t.Fatal(err)
+	}
+	if parsed.Content[1].Data != "" {
+		t.Errorf("expected image Data stripped, got %q", parsed.Content[1].Data)
+	}
+	if parsed.Content[1].DisplayImageURL != "/api/message/msg-eot/image/1/-1" {
+		t.Errorf("unexpected image URL: %q", parsed.Content[1].DisplayImageURL)
+	}
+
+	// Non-agent message: no end_of_turn pointer, but still stripped.
+	_, userEOT := llmDataForAPI(&s, string(db.MessageTypeUser), "msg-eot")
+	if userEOT != nil {
+		t.Errorf("expected nil end_of_turn for non-agent message, got %v", *userEOT)
+	}
+
+	// nil input returns (nil, nil).
+	if d, e := llmDataForAPI(nil, string(db.MessageTypeAgent), "x"); d != nil || e != nil {
+		t.Errorf("expected (nil, nil) for nil input, got (%v, %v)", d, e)
+	}
+
+	// No image: original pointer returned unchanged.
+	plain := llm.Message{
+		Role: llm.MessageRoleAssistant, EndOfTurn: false,
+		Content: []llm.Content{{Type: llm.ContentTypeText, Text: "no image"}},
+	}
+	pd, _ := json.Marshal(plain)
+	ps := string(pd)
+	gotPlain, gotPlainEOT := llmDataForAPI(&ps, string(db.MessageTypeAgent), "msg-plain")
+	if gotPlain != &ps {
+		t.Errorf("expected original pointer returned unchanged when nothing stripped")
+	}
+	if gotPlainEOT == nil || *gotPlainEOT != false {
+		t.Errorf("expected end_of_turn=false, got %v", gotPlainEOT)
+	}
+}
