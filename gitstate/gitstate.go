@@ -2,8 +2,10 @@
 package gitstate
 
 import (
+	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -29,7 +31,194 @@ type GitState struct {
 
 // GetGitState returns the git state for the given directory.
 // If dir is empty, uses the current working directory.
+//
+// It reads the repository's files directly (no git subprocess), which is fast
+// enough to call inline while building the conversation list -- spawning git
+// per repo cost ~15ms each and seconds across the dozens of repos a long-lived
+// install accumulates. If the on-disk layout is something the lightweight
+// reader doesn't understand, it falls back to the git binary so the result is
+// always correct.
 func GetGitState(dir string) *GitState {
+	if state, ok := getGitStateFromFiles(dir); ok {
+		return state
+	}
+	return getGitStateFromGit(dir)
+}
+
+// getGitStateFromFiles computes the git state by reading .git directly. The
+// bool result is false when the directory isn't recognisable as a repo via
+// files or the layout needs the git binary (e.g. an unsupported ref form);
+// callers then fall back to getGitStateFromGit. A directory that is genuinely
+// not a repo returns (non-repo state, true) so we don't waste a subprocess
+// confirming it.
+func getGitStateFromFiles(dir string) (*GitState, bool) {
+	if dir == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, false
+		}
+		dir = wd
+	}
+	worktree, gitDir, ok := findWorktree(dir)
+	if !ok {
+		return &GitState{}, true // definitively not in a repo
+	}
+	commonDir := resolveCommonDir(gitDir)
+
+	branch, commit, ok := resolveHead(gitDir, commonDir)
+	if !ok {
+		return nil, false
+	}
+	state := &GitState{IsRepo: true, Worktree: worktree, Branch: branch}
+	if commit != "" {
+		state.Commit = shortHash(commit)
+		if subject, err := readCommitSubject(commonDir, commit); err == nil {
+			state.Subject = subject
+		} else {
+			return nil, false // couldn't decode the commit; let git handle it
+		}
+	}
+	return state, true
+}
+
+// shortHash abbreviates a full SHA-1 to git's default 7-character short form.
+func shortHash(full string) string {
+	if len(full) >= 7 {
+		return full[:7]
+	}
+	return full
+}
+
+// findWorktree walks up from dir to the worktree root (the directory holding
+// .git) and returns it along with the resolved .git directory.
+func findWorktree(dir string) (worktree, gitDir string, ok bool) {
+	dir = filepath.Clean(dir)
+	for {
+		dotgit := filepath.Join(dir, ".git")
+		if fi, err := os.Stat(dotgit); err == nil {
+			if fi.IsDir() {
+				return dir, dotgit, true
+			}
+			if gd, err := gitDirFromFile(dotgit); err == nil {
+				return dir, gd, true
+			}
+			return "", "", false
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", "", false
+		}
+		dir = parent
+	}
+}
+
+// gitDirFromFile resolves the "gitdir: <path>" pointer in a linked worktree's
+// .git file to an absolute path.
+func gitDirFromFile(dotgit string) (string, error) {
+	data, err := os.ReadFile(dotgit)
+	if err != nil {
+		return "", err
+	}
+	line := strings.TrimSpace(string(data))
+	p, ok := strings.CutPrefix(line, "gitdir:")
+	if !ok {
+		return "", errors.New("unexpected .git file contents")
+	}
+	p = strings.TrimSpace(p)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(filepath.Dir(dotgit), p)
+	}
+	return filepath.Clean(p), nil
+}
+
+// resolveCommonDir returns the shared object/refs directory for gitDir. For a
+// linked worktree, gitDir/commondir points at the main repo's .git; loose
+// objects and packed-refs live there, while HEAD is per-worktree in gitDir.
+func resolveCommonDir(gitDir string) string {
+	data, err := os.ReadFile(filepath.Join(gitDir, "commondir"))
+	if err != nil {
+		return gitDir
+	}
+	cd := strings.TrimSpace(string(data))
+	if !filepath.IsAbs(cd) {
+		cd = filepath.Join(gitDir, cd)
+	}
+	return filepath.Clean(cd)
+}
+
+// resolveHead reads HEAD and returns the branch (empty if detached) and the
+// full commit hash it points at. ok is false if HEAD can't be resolved to a
+// commit via files (e.g. an unborn branch), so the caller falls back to git.
+func resolveHead(gitDir, commonDir string) (branch, commit string, ok bool) {
+	head, err := os.ReadFile(filepath.Join(gitDir, "HEAD"))
+	if err != nil {
+		return "", "", false
+	}
+	line := strings.TrimSpace(string(head))
+	ref, isSymbolic := strings.CutPrefix(line, "ref:")
+	if !isSymbolic {
+		// Detached HEAD: the line is the commit hash itself.
+		if isHexHash(line) {
+			return "", line, true
+		}
+		return "", "", false
+	}
+	ref = strings.TrimSpace(ref)
+	branch = strings.TrimPrefix(ref, "refs/heads/")
+	commit, ok = resolveRef(gitDir, commonDir, ref)
+	if !ok {
+		// An unborn branch (ref points nowhere yet) has no commit; treat that
+		// as a repo with no commit rather than failing over to git.
+		return branch, "", true
+	}
+	return branch, commit, true
+}
+
+// resolveRef resolves a ref name to a full commit hash, checking the loose ref
+// file first (per-worktree HEAD refs may live in gitDir) and then packed-refs.
+func resolveRef(gitDir, commonDir, ref string) (string, bool) {
+	for _, base := range []string{gitDir, commonDir} {
+		if data, err := os.ReadFile(filepath.Join(base, filepath.FromSlash(ref))); err == nil {
+			h := strings.TrimSpace(string(data))
+			if isHexHash(h) {
+				return h, true
+			}
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(commonDir, "packed-refs")); err == nil {
+		for _, l := range strings.Split(string(data), "\n") {
+			l = strings.TrimSpace(l)
+			if l == "" || l[0] == '#' || l[0] == '^' {
+				continue
+			}
+			if sp := strings.IndexByte(l, ' '); sp > 0 && l[sp+1:] == ref {
+				if h := l[:sp]; isHexHash(h) {
+					return h, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// isHexHash reports whether s is a 40-character lowercase-or-uppercase hex
+// SHA-1.
+func isHexHash(s string) bool {
+	if len(s) != 40 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+// getGitStateFromGit is the subprocess implementation, used as a fallback when
+// the file-based reader can't interpret the repository layout.
+func getGitStateFromGit(dir string) *GitState {
 	state := &GitState{}
 
 	// Get the worktree root (this works for both regular repos and worktrees)
