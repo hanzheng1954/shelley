@@ -56,7 +56,7 @@ import DirectoryPickerModal from "./DirectoryPickerModal";
 import { useVersionChecker } from "./VersionChecker";
 import TerminalPanel, { EphemeralTerminal } from "./TerminalPanel";
 import ModelPicker from "./ModelPicker";
-import ThinkingLevelPicker, { ThinkingLevel } from "./ThinkingLevelPicker";
+import ThinkingLevelPicker, { DEFAULT_THINKING_LEVEL, ThinkingLevel } from "./ThinkingLevelPicker";
 import ModelBar from "./ModelBar";
 import SystemPromptView from "./SystemPromptView";
 import {
@@ -730,7 +730,7 @@ interface ChatInterfaceProps {
     conversationType?: "normal" | "orchestrator",
     subagentBackend?: "shelley" | "claude-cli" | "codex-cli",
     toolOverrides?: Record<string, "on" | "off">,
-    thinkingLevel?: Exclude<ThinkingLevel, "">,
+    thinkingLevel?: ThinkingLevel,
   ) => Promise<void>;
   onDistillNewGeneration?: (
     sourceConversationId: string,
@@ -913,20 +913,19 @@ function ChatInterface({
   const [thinkingLevel, setThinkingLevelState] = useState<ThinkingLevel>(() => {
     try {
       const stored = localStorage.getItem(THINKING_LEVEL_KEY);
-      const valid: ThinkingLevel[] = ["", "off", "minimal", "low", "medium", "high", "xhigh"];
+      const valid: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
       if (stored !== null && valid.includes(stored as ThinkingLevel)) {
         return stored as ThinkingLevel;
       }
     } catch {
       /* ignore */
     }
-    return "";
+    return DEFAULT_THINKING_LEVEL;
   });
   const setThinkingLevel = (level: ThinkingLevel) => {
     setThinkingLevelState(level);
     try {
-      if (level === "") localStorage.removeItem(THINKING_LEVEL_KEY);
-      else localStorage.setItem(THINKING_LEVEL_KEY, level);
+      localStorage.setItem(THINKING_LEVEL_KEY, level);
     } catch {
       /* ignore */
     }
@@ -1743,7 +1742,7 @@ function ChatInterface({
       orchestratorOn ? "orchestrator" : undefined,
       orchestratorOn ? subagentBackend : undefined,
       Object.keys(realOverrides).length > 0 ? realOverrides : undefined,
-      thinkingLevel === "" ? undefined : thinkingLevel,
+      thinkingLevel,
     );
   };
 

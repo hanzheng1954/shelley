@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 
-export type ThinkingLevel = "" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export const DEFAULT_THINKING_LEVEL: ThinkingLevel = "medium";
 
 export const THINKING_LEVELS: { value: ThinkingLevel; label: string }[] = [
-  { value: "", label: "default" },
   { value: "off", label: "off" },
   { value: "minimal", label: "minimal" },
   { value: "low", label: "low" },
@@ -50,7 +51,9 @@ function ThinkingLevelPicker({ value, onChange, disabled = false }: ThinkingLeve
     }
   }, [isOpen]);
 
-  const current = THINKING_LEVELS.find((l) => l.value === value) || THINKING_LEVELS[0];
+  const current =
+    THINKING_LEVELS.find((l) => l.value === value) ||
+    THINKING_LEVELS.find((l) => l.value === DEFAULT_THINKING_LEVEL)!;
 
   return (
     <div className="model-picker thinking-level-picker" ref={containerRef}>
