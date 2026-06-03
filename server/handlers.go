@@ -2035,9 +2035,9 @@ func (s *Server) runStream(w http.ResponseWriter, r *http.Request, conversationI
 }
 
 // handleVersion returns build information plus the capabilities list as
-// JSON. The capabilities slot exists so clients can negotiate optional,
-// additive features without reshaping the response; the set is currently
-// empty.
+// JSON. The capabilities slot lets clients negotiate optional, additive
+// features without reshaping the response. See version.Capabilities for
+// the current set.
 func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

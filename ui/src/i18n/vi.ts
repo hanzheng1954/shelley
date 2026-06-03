@@ -225,6 +225,7 @@ export const vi: TranslationKeys = {
 
   // Status Bar
   modelLabel: "Model:",
+  thinkingLabel: "Suy nghĩ:",
   dirLabel: "Thư mục:",
 
   // Sidebar buttons

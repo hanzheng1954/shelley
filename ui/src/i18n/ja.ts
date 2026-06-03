@@ -226,6 +226,7 @@ export const ja: TranslationKeys = {
 
   // Status Bar
   modelLabel: "モデル:",
+  thinkingLabel: "思考量:",
   dirLabel: "ディレクトリ:",
 
   // Sidebar buttons

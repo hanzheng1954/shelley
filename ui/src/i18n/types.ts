@@ -220,6 +220,7 @@ export interface TranslationKeys {
 
   // Status Bar
   modelLabel: string;
+  thinkingLabel: string;
   dirLabel: string;
 
   // AGENTS.md editor

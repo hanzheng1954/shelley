@@ -225,6 +225,7 @@ export const upgoer5: TranslationKeys = {
 
   // Status Bar
   modelLabel: "Brain:",
+  thinkingLabel: "Think:",
   dirLabel: "Place:",
 
   // Sidebar buttons

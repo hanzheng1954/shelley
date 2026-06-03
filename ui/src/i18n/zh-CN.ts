@@ -225,6 +225,7 @@ export const zhCN: TranslationKeys = {
 
   // Status Bar
   modelLabel: "模型：",
+  thinkingLabel: "思考：",
   dirLabel: "目录：",
 
   // Sidebar buttons

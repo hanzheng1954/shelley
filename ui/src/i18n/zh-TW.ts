@@ -225,6 +225,7 @@ export const zhTW: TranslationKeys = {
 
   // Status Bar
   modelLabel: "模型：",
+  thinkingLabel: "思考：",
   dirLabel: "目錄：",
 
   // Sidebar buttons

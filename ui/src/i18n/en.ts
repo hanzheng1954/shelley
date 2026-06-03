@@ -225,6 +225,7 @@ export const en: TranslationKeys = {
 
   // Status Bar
   modelLabel: "Model:",
+  thinkingLabel: "Effort:",
   dirLabel: "Dir:",
 
   // Sidebar buttons

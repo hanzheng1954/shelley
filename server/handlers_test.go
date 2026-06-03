@@ -38,12 +38,19 @@ func TestHandleVersion(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
-	// capabilities is an empty list today, but the field must be present
-	// so clients can rely on its shape.
+	// capabilities must be present so clients can rely on its shape,
+	// and must include the features the server actively advertises.
 	if body.Capabilities == nil {
-		t.Errorf("expected capabilities field in response, got nil")
-	} else if len(*body.Capabilities) != 0 {
-		t.Errorf("expected empty capabilities, got %v", *body.Capabilities)
+		t.Fatalf("expected capabilities field in response, got nil")
+	}
+	var haveThinking bool
+	for _, c := range *body.Capabilities {
+		if c == "thinking-levels" {
+			haveThinking = true
+		}
+	}
+	if !haveThinking {
+		t.Errorf("expected capabilities to include \"thinking-levels\", got %v", *body.Capabilities)
 	}
 	if body.Modified != nil {
 		t.Errorf("unexpected modified field in response: %v", *body.Modified)

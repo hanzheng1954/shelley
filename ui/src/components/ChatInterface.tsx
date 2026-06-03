@@ -2509,6 +2509,12 @@ function ChatInterface({
           />
         </div>
         <div className="status-field status-field-thinking">
+          <span
+            className="status-field-label"
+            title="Reasoning effort the model spends before answering"
+          >
+            {t("thinkingLabel")}
+          </span>
           <ThinkingLevelPicker
             value={thinkingLevel}
             onChange={setThinkingLevel}

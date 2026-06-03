@@ -225,6 +225,7 @@ export const ru: TranslationKeys = {
 
   // Status Bar
   modelLabel: "Модель:",
+  thinkingLabel: "Усилие:",
   dirLabel: "Каталог:",
 
   // Sidebar buttons

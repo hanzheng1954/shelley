@@ -3678,7 +3678,6 @@ svg {
 .status-bar-new-conversation {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   width: 100%;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -3697,7 +3696,7 @@ svg {
   }
 
   .status-field-label {
-    width: 2.5rem;
+    width: 4rem;
     text-align: right;
   }
 }
