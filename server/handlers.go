@@ -1094,10 +1094,38 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Get LLM service for the requested model
+	// Load the conversation up front; we need its persisted model to
+	// resolve an omitted `model` (see below) and the draft branches need
+	// it too.
+	existing, err := s.db.GetConversationByID(ctx, conversationID)
+	if err != nil {
+		s.logger.Error("Failed to load conversation", "conversationID", conversationID, "error", err)
+		http.Error(w, "Conversation not found", http.StatusNotFound)
+		return
+	}
+
+	// Resolve the model. Precedence:
+	//  1. an explicit `model` in the request (for a draft, this also
+	//     retargets the conversation via the promote branch below),
+	//  2. the conversation's own persisted model (a running loop is pinned
+	//     to its model, so any other choice would 400 with
+	//     errConversationModelMismatch),
+	//  3. the host's effective default (conversations that never recorded a
+	//     model).
+	//
+	// Clients that don't track a conversation's model — notably the iOS
+	// push "Reply" handler, which fires from a background launch with no
+	// loaded chat state — send an empty `model`. Before this, the empty
+	// model resolved straight to effectiveDefaultModel, so a reply to any
+	// conversation running a non-default model was silently rejected and
+	// never reached the agent.
 	modelID := req.Model
 	if modelID == "" {
-		modelID = s.effectiveDefaultModel(s.getModelList())
+		if existing.Model != nil && *existing.Model != "" {
+			modelID = *existing.Model
+		} else {
+			modelID = s.effectiveDefaultModel(s.getModelList())
+		}
 	}
 
 	llmService, err := s.llmManager.GetService(modelID)
@@ -1113,12 +1141,6 @@ func (s *Server) handleChatConversation(w http.ResponseWriter, r *http.Request, 
 	// the overrides under the same validation the new-conversation path
 	// runs, then promote (clearing is_draft and the draft body). For
 	// non-drafts these branches are skipped.
-	existing, err := s.db.GetConversationByID(ctx, conversationID)
-	if err != nil {
-		s.logger.Error("Failed to load conversation", "conversationID", conversationID, "error", err)
-		http.Error(w, "Conversation not found", http.StatusNotFound)
-		return
-	}
 	if existing.IsDraft {
 		if req.Cwd != "" {
 			if err := s.db.UpdateConversationCwd(ctx, conversationID, req.Cwd); err != nil {

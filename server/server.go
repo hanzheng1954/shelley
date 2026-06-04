@@ -1862,6 +1862,22 @@ func withExeNotifyHook(hooks []db.ConversationHook, enabled bool) []db.Conversat
 	return out
 }
 
+// endOfTurnPushCategory is the APNs notification category attached to
+// end-of-turn pushes. It is a contract with the client: the client
+// registers the inline "Reply" action against this exact identifier and
+// shows the reply button only for categories it recognizes.
+//
+// The "_V2" generation gates replies on a server that can actually accept
+// them. The original (un-suffixed) category was emitted by server builds
+// whose chat handler silently 400'd a reply that omitted the model on any
+// conversation running a non-default model — the reply never reached the
+// agent. Because the category and that fix both live in the server, a
+// build emits the V2 category iff it carries the fix, so a client gated on
+// V2 never offers a reply to a server that would drop it. Bump the
+// generation again if a future change alters what the client may assume
+// about end-of-turn pushes.
+const endOfTurnPushCategory = "SHELLEY_END_OF_TURN_MESSAGE_V2"
+
 func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook, event notifications.Event) {
 	payload, ok := event.Payload.(notifications.AgentDonePayload)
 	if !ok {
@@ -1899,7 +1915,7 @@ func (s *Server) sendEndOfTurnHook(ctx context.Context, hook db.ConversationHook
 		"title":    title,
 		"body":     body,
 		"data":     data,
-		"category": "SHELLEY_END_OF_TURN_MESSAGE",
+		"category": endOfTurnPushCategory,
 	}
 	if subtitle != "" {
 		hookPayload["subtitle"] = subtitle
