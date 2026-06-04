@@ -2723,8 +2723,27 @@ function ChatInterface({
   // - Non-draft conversation: autosave is inert. Saves are debounced with
   //   exponential backoff; see useDraftAutosave.
   const [draftValue, setDraftValue] = useState<string>("");
+
+  // The id of a draft we lazily created from the current input session.
+  // Lazy creation flips conversationId from null to this id, which would
+  // otherwise change the MessageInput key and remount the textarea —
+  // resetting the caret to the start mid-typing. We treat this id as part
+  // of the same "new conversation" input session (the MessageInput key
+  // ignores it) so the textarea is preserved. Cleared once the user
+  // navigates elsewhere.
+  const [lazyDraftId, setLazyDraftId] = useState<string | null>(null);
+  useEffect(() => {
+    // Genuine navigation to a different conversation ends the session.
+    if (lazyDraftId && conversationId !== lazyDraftId) setLazyDraftId(null);
+  }, [conversationId, lazyDraftId]);
+
   // Initialize from the conversation row when switching into a draft.
   useEffect(() => {
+    // Skip our own lazily-created draft: its row arrives via the patch
+    // stream carrying the snapshot saved at create time, which is stale
+    // relative to the live textarea. Clobbering draftValue here would
+    // drop keystrokes typed after the create fired (and reset the caret).
+    if (conversationId === lazyDraftId && lazyDraftId !== null) return;
     if (currentConversation?.is_draft) {
       setDraftValue(currentConversation.draft || "");
     } else if (!conversationId) {
@@ -2733,7 +2752,7 @@ function ChatInterface({
     // Switching into a non-draft conversation leaves draftValue stale,
     // but the MessageInput is keyed by conversationId so it remounts and
     // re-syncs from this state on the next render anyway.
-  }, [conversationId, currentConversation?.is_draft, currentConversation?.draft]);
+  }, [conversationId, currentConversation?.is_draft, currentConversation?.draft, lazyDraftId]);
 
   const draftConvIdRef = useRef<string | null>(conversationId);
   useEffect(() => {
@@ -2769,6 +2788,9 @@ function ChatInterface({
         })
         .then((conv) => {
           draftConvIdRef.current = conv.conversation_id;
+          // Mark this as the current input session's draft so the key flip
+          // below doesn't remount the textarea out from under the caret.
+          setLazyDraftId(conv.conversation_id);
           onDraftCreated?.(conv.conversation_id);
           return conv.conversation_id;
         });
@@ -3395,7 +3417,7 @@ function ChatInterface({
       {/* Message input — hidden for archived conversations */}
       {!currentConversation?.archived && (
         <MessageInput
-          key={conversationId || "new"}
+          key={(conversationId === lazyDraftId ? null : conversationId) || "new"}
           onSend={sendMessage}
           onQueue={queueMessage}
           showQueueOption={!!conversationId}
