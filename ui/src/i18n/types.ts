@@ -94,6 +94,7 @@ export interface TranslationKeys {
   restore: string;
   deletePermanently: string;
   confirmDelete: string;
+  confirmDeleteShort: string;
   duplicateName: string;
   agentIsWorking: string;
   subagentIsWorking: string;

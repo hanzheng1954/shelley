@@ -94,6 +94,7 @@ export const upgoer5: TranslationKeys = {
   restore: "Bring Back",
   deletePermanently: "Throw Away for Good",
   confirmDelete: "Are you sure? You can't take this back.",
+  confirmDeleteShort: "Drop it?",
   duplicateName: "There is already a talk with that name",
   agentIsWorking: "Helper is working...",
   subagentIsWorking: "Little helper is working...",

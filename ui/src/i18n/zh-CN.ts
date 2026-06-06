@@ -94,6 +94,7 @@ export const zhCN: TranslationKeys = {
   restore: "恢复",
   deletePermanently: "永久删除",
   confirmDelete: "确定要删除吗？此操作无法撤消。",
+  confirmDeleteShort: "删除？",
   duplicateName: "已存在同名对话",
   agentIsWorking: "代理正在工作...",
   subagentIsWorking: "子代理正在工作...",

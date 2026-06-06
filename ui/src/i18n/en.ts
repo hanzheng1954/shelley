@@ -94,6 +94,7 @@ export const en: TranslationKeys = {
   restore: "Restore",
   deletePermanently: "Delete Permanently",
   confirmDelete: "Are you sure? This cannot be undone.",
+  confirmDeleteShort: "Delete?",
   duplicateName: "A conversation with this name already exists",
   agentIsWorking: "Agent is working...",
   subagentIsWorking: "Subagent is working...",

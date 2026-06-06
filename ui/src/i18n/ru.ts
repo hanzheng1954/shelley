@@ -94,6 +94,7 @@ export const ru: TranslationKeys = {
   restore: "Восстановить",
   deletePermanently: "Удалить навсегда",
   confirmDelete: "Вы уверены? Это действие нельзя отменить.",
+  confirmDeleteShort: "Удалить?",
   duplicateName: "Диалог с таким именем уже существует",
   agentIsWorking: "Агент работает...",
   subagentIsWorking: "Субагент работает...",

@@ -180,6 +180,11 @@ function ConversationDrawer({
   // entire list when it first mounts.
   const [seenIds, setSeenIds] = useState<Set<string> | null>(null);
   const [copiedConvId, setCopiedConvId] = useState<string | null>(null);
+  // ID of the conversation/draft whose trash icon was clicked; we render an
+  // inline confirm/cancel pair in place of the trash icon instead of using a
+  // window.confirm() alert.
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const pendingDeleteRef = useRef<HTMLDivElement>(null);
   const groupMenuRef = React.useRef<HTMLDivElement>(null);
   const renameInputRef = React.useRef<HTMLInputElement>(null);
   const copyTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -378,17 +383,25 @@ function ConversationDrawer({
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, conversationId: string) => {
+  const handleDeleteClick = (e: React.MouseEvent, conversationId: string) => {
     e.stopPropagation();
-    if (!confirm(t("confirmDelete"))) {
-      return;
-    }
+    setPendingDeleteId(conversationId);
+  };
+
+  const handleConfirmDelete = async (e: React.MouseEvent, conversationId: string) => {
+    e.stopPropagation();
+    setPendingDeleteId(null);
     try {
       await api.deleteConversation(conversationId);
       setArchivedConversations((prev) => prev.filter((c) => c.conversation_id !== conversationId));
     } catch (err) {
       console.error("Failed to delete conversation:", err);
     }
+  };
+
+  const handleCancelDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPendingDeleteId(null);
   };
 
   // Sanitize slug: lowercase, alphanumeric and hyphens only, max 60 chars
@@ -402,6 +415,18 @@ function ConversationDrawer({
       .slice(0, 60)
       .replace(/-$/g, "");
   };
+
+  // Dismiss the inline delete confirmation on any outside click.
+  useEffect(() => {
+    if (!pendingDeleteId) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (pendingDeleteRef.current && !pendingDeleteRef.current.contains(e.target as Node)) {
+        setPendingDeleteId(null);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [pendingDeleteId]);
 
   // Close the tag editor when the user clicks outside it. We attach the
   // listener only while a popover is open to avoid global mousedown overhead.
@@ -675,6 +700,70 @@ function ConversationDrawer({
     return sorted;
   }, [topLevelConversations, groupBy, showArchived, t, resortKey]);
 
+  const renderDeleteButton = (conversationId: string) => {
+    if (pendingDeleteId === conversationId) {
+      return (
+        <div
+          className="drawer-delete-confirm"
+          ref={pendingDeleteRef}
+          onClick={(e) => e.stopPropagation()}
+          title={t("confirmDelete")}
+        >
+          <span className="drawer-delete-confirm-label">{t("confirmDeleteShort")}</span>
+          <button
+            type="button"
+            onClick={(e) => handleConfirmDelete(e, conversationId)}
+            className="btn-icon-sm btn-danger drawer-delete-confirm-yes"
+            title={t("delete_")}
+            aria-label={t("delete_")}
+          >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={handleCancelDelete}
+            className="btn-icon-sm"
+            title={t("cancel")}
+            aria-label={t("cancel")}
+          >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={(e) => handleDeleteClick(e, conversationId)}
+        className="btn-icon-sm btn-danger"
+        title={t("deletePermanently")}
+        aria-label={t("delete_")}
+      >
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="drawer-icon-size">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+          />
+        </svg>
+      </button>
+    );
+  };
+
   const renderConversationItem = (conversation: Conversation | ConversationWithState) => {
     const convState = conversation as ConversationWithState;
     // Drafts are real conversations with is_draft=true and no messages.
@@ -852,26 +941,7 @@ function ConversationDrawer({
               )}
               {isDraft && (
                 <div className="conversation-actions drawer-actions-row">
-                  <button
-                    onClick={(e) => handleDelete(e, conversation.conversation_id)}
-                    className="btn-icon-sm btn-danger"
-                    title={t("deletePermanently")}
-                    aria-label={t("delete_")}
-                  >
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      className="drawer-icon-size"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
+                  {renderDeleteButton(conversation.conversation_id)}
                 </div>
               )}
               {!isDraft && !itemArchived && (
@@ -988,26 +1058,7 @@ function ConversationDrawer({
                   />
                 </svg>
               </button>
-              <button
-                onClick={(e) => handleDelete(e, conversation.conversation_id)}
-                className="btn-icon-sm btn-danger"
-                title={t("deletePermanently")}
-                aria-label={t("delete_")}
-              >
-                <svg
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  className="drawer-icon-size"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                  />
-                </svg>
-              </button>
+              {renderDeleteButton(conversation.conversation_id)}
             </div>
           )}
         </div>

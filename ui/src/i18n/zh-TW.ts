@@ -94,6 +94,7 @@ export const zhTW: TranslationKeys = {
   restore: "還原",
   deletePermanently: "永久刪除",
   confirmDelete: "確定要刪除嗎？此操作無法復原。",
+  confirmDeleteShort: "刪除？",
   duplicateName: "已存在同名對話",
   agentIsWorking: "代理正在工作...",
   subagentIsWorking: "子代理正在工作...",

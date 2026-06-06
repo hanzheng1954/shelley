@@ -94,6 +94,7 @@ export const vi: TranslationKeys = {
   restore: "Khôi phục",
   deletePermanently: "Xóa vĩnh viễn",
   confirmDelete: "Thật sự chắc chưa?",
+  confirmDeleteShort: "Xoá?",
   duplicateName: "Bị trùng tên với hội thoại đã có",
   agentIsWorking: "Agent đang làm việc...",
   subagentIsWorking: "Subagent đang làm việc...",
