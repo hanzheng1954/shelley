@@ -182,6 +182,8 @@ export interface GitGraphCommit {
   timestamp: number;
   refs: string[];
   isHead: boolean;
+  // True if this commit is the merge-base with @{upstream}.
+  isMergeBase?: boolean;
 }
 
 export interface GitGraphResponse {

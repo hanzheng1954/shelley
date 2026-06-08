@@ -9120,6 +9120,13 @@ kbd {
   color: #1e3a8a;
 }
 
+.git-graph-ref-mergebase {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border-color);
+  font-style: italic;
+}
+
 .git-graph-ref-tag {
   background: #e9d5ff;
   color: #581c87;
