@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -513,6 +514,20 @@ func makeToolResult(id, text string) apiContentBlock {
 		ToolUseID: id,
 		Content:   text,
 	}
+}
+
+// gitExec runs a git command in the given directory and returns trimmed stdout.
+func gitExec(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("git %s: %w\nstderr: %s", strings.Join(args, " "), err, string(ee.Stderr))
+		}
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func executeGitCommand(repoRoot, command string) string {

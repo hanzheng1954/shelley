@@ -3,14 +3,15 @@
 // Usage:
 //
 //	lazycue [options] "test description" ["test description" ...]
-//	lazycue promote [options]
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,23 +19,17 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "promote" {
-		runPromote(os.Args[2:])
-		return
-	}
 	runTests()
 }
 
 func runTests() {
 	baseURL := flag.String("base-url", "", "Base URL of the app under test (required)")
-	remote := flag.String("remote", "origin", "Git remote for cache")
+	testsFile := flag.String("tests-file", "", "Read test descriptions from a JSON file (array of strings); combined with any positional args")
+	cacheDir := flag.String("cache-dir", "", "Directory for cache JSON files (default: .lazycue next to --tests-file, else .lazycue)")
 	model := flag.String("model", "", "LLM model (default: claude-sonnet-4-6)")
 	apiURL := flag.String("api-url", "", "Anthropic API base URL (env: ANTHROPIC_BASE_URL)")
 	apiKey := flag.String("api-key", "", "Anthropic API key (env: ANTHROPIC_API_KEY)")
 	verbose := flag.Bool("verbose", false, "Verbose output")
-	noPush := flag.Bool("no-push", false, "Save cache locally only; use 'promote' subcommand to push to remote after CI passes")
-	noFetch := flag.Bool("no-fetch", false, "Use local cache only — don't fetch refs from the remote")
-	commit := flag.String("commit", "", "Pin cache to this commit SHA instead of HEAD (controls which cached tests are visible via git ancestry)")
 
 	flag.Parse()
 
@@ -44,22 +39,36 @@ func runTests() {
 	}
 
 	descriptions := flag.Args()
+	if *testsFile != "" {
+		fromFile, err := readTestsFile(*testsFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: reading tests file: %v\n", err)
+			os.Exit(2)
+		}
+		descriptions = append(descriptions, fromFile...)
+	}
 	if len(descriptions) == 0 {
 		fmt.Fprintln(os.Stderr, `usage: lazycue [options] "test description" ["test description" ...]`)
-		fmt.Fprintln(os.Stderr, "       lazycue promote [options]")
+		fmt.Fprintln(os.Stderr, "       lazycue --tests-file tests.json [options]")
 		os.Exit(2)
+	}
+
+	resolvedCacheDir := *cacheDir
+	if resolvedCacheDir == "" {
+		if *testsFile != "" {
+			resolvedCacheDir = filepath.Join(filepath.Dir(*testsFile), ".lazycue")
+		} else {
+			resolvedCacheDir = ".lazycue"
+		}
 	}
 
 	opts := lazycue.Options{
 		BaseURL:          *baseURL,
-		Remote:           *remote,
+		CacheDir:         resolvedCacheDir,
 		Model:            *model,
 		AnthropicBaseURL: *apiURL,
 		AnthropicAPIKey:  *apiKey,
 		Verbose:          *verbose,
-		NoPush:           *noPush,
-		NoFetch:          *noFetch,
-		Commit:           *commit,
 	}
 
 	ctx := context.Background()
@@ -100,29 +109,17 @@ func runTests() {
 	}
 }
 
-func runPromote(args []string) {
-	fs := flag.NewFlagSet("promote", flag.ExitOnError)
-	remote := fs.String("remote", "origin", "Git remote for cache")
-	commit := fs.String("commit", "", "Re-tag refs under this commit SHA before pushing (default: keep existing)")
-	fs.Parse(args)
-
-	root, err := lazycue.DetectRepoRoot()
+// readTestsFile reads a JSON array of test description strings from a file.
+func readTestsFile(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: not in a git repository: %v\n", err)
-		os.Exit(2)
+		return nil, err
 	}
-
-	pushed, err := lazycue.PromoteRefs(root, *remote, *commit)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\033[31merror: %v\033[0m\n", err)
-		os.Exit(1)
+	var descs []string
+	if err := json.Unmarshal(data, &descs); err != nil {
+		return nil, fmt.Errorf("expected a JSON array of strings: %w", err)
 	}
-
-	if pushed == 0 {
-		fmt.Println("no local cache refs to promote")
-	} else {
-		fmt.Printf("\033[32m✓ promoted %d cache ref(s) to %s\033[0m\n", pushed, *remote)
-	}
+	return descs, nil
 }
 
 func printResult(idx, total int, r *lazycue.TestResult) {

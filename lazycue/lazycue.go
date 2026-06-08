@@ -1,9 +1,10 @@
 // Package lazycue implements self-healing browser tests written as plain English.
 //
-// A test is a description string. The system hashes the description to check
-// git refs for a cached DSL test script. If cached, it executes the DSL.
-// If the test passes, it's done. If it fails (or isn't cached), an LLM agent
-// generates or fixes the DSL, and the new version is saved.
+// A test is a description string. The system hashes the description to look up a
+// cached DSL test script stored as a JSON file in a .lazycue/ directory next to
+// the tests. If cached, it executes the DSL. If the test passes, it's done. If
+// it fails (or isn't cached), an LLM agent generates or fixes the DSL, and the
+// new version is written back to the cache file.
 package lazycue
 
 import (
@@ -19,20 +20,16 @@ import (
 // Options configures a lazycue test run.
 type Options struct {
 	BaseURL          string // Base URL of the application under test (required)
-	Remote           string // Git remote for cache (default: "origin")
+	CacheDir         string // Directory holding cache JSON files (default: ".lazycue")
 	Model            string // LLM model (default: "claude-sonnet-4-6")
 	AnthropicBaseURL string // Anthropic API base URL (default: ANTHROPIC_BASE_URL or https://api.anthropic.com)
 	AnthropicAPIKey  string // Anthropic API key (default: ANTHROPIC_API_KEY)
-	RepoRoot         string // Git repo root (default: auto-detect)
 	Verbose          bool   // Verbose output
-	NoPush           bool   // If true, don't push cache refs to remote after saving
-	NoFetch          bool   // If true, use local cache only — don't fetch refs from the remote
-	Commit           string // Commit SHA to tag cache with; also used for ancestry filtering (default: HEAD)
 }
 
 func (o *Options) defaults() {
-	if o.Remote == "" {
-		o.Remote = "origin"
+	if o.CacheDir == "" {
+		o.CacheDir = ".lazycue"
 	}
 	if o.Model == "" {
 		o.Model = "claude-sonnet-4-6"
@@ -92,46 +89,20 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 		return nil, fmt.Errorf("BaseURL is required")
 	}
 
-	if opts.RepoRoot == "" {
-		root, err := DetectRepoRoot()
-		if err != nil {
-			return nil, fmt.Errorf("cannot detect repo root: %w", err)
-		}
-		opts.RepoRoot = root
-	}
-
-	// Resolve commit for cache ancestry.
-	commit := opts.Commit
-	if commit == "" {
-		commit = detectGitSHA(opts.RepoRoot)
-	}
-
 	logf := func(format string, args ...any) {
 		if opts.Verbose {
 			log.Printf(format, args...)
 		}
 	}
 
-	// Step 1: Check cache — local first, then remote.
-	logf("[lazycue] checking local cache")
-	cachedTest, cacheHit, err := GetCachedTest(opts.RepoRoot, opts.Remote, description, commit)
+	// Step 1: Check cache.
+	logf("[lazycue] checking cache in %s", opts.CacheDir)
+	cachedTest, cacheHit, err := GetCachedTest(opts.CacheDir, description)
 	if err != nil {
 		logf("[lazycue] warning: get cached test: %v", err)
 	}
-
-	if cachedTest == nil && !opts.NoFetch {
-		remoteURL := RemoteURL(opts.RepoRoot, opts.Remote)
-		logf("[lazycue] no local cache hit, fetching from %s (%s)", opts.Remote, remoteURL)
-		if err := FetchCachedRefs(opts.RepoRoot, opts.Remote); err != nil {
-			logf("[lazycue] warning: fetch cache refs from %s: %v", remoteURL, err)
-		}
-
-		cachedTest, cacheHit, err = GetCachedTest(opts.RepoRoot, opts.Remote, description, commit)
-		if err != nil {
-			logf("[lazycue] warning: get cached test: %v", err)
-		}
-	} else if cachedTest != nil {
-		logf("[lazycue] local cache hit: v%d from %s", cacheHit.Version, cacheHit.Ref)
+	if cachedTest != nil {
+		logf("[lazycue] cache hit: v%d", cacheHit.Version)
 	}
 
 	var version int
@@ -147,13 +118,11 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 	}
 	defer browser.Close()
 
-	push := !opts.NoPush
-
 	// Step 3: If cached, try executing
 	if cachedTest != nil {
 		steps, parseErr := ParseSteps(cachedTest.Steps)
 		if parseErr == nil {
-			logf("[lazycue] found cached v%d (%d steps) from %s", version, len(steps), cacheHit.Ref)
+			logf("[lazycue] found cached v%d (%d steps)", version, len(steps))
 			results, execErr := browser.ExecuteSteps(ctx, opts.BaseURL, steps)
 			allPassed := execErr == nil
 			for _, r := range results {
@@ -196,7 +165,6 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 				Model:            opts.Model,
 				AnthropicBaseURL: opts.AnthropicBaseURL,
 				AnthropicAPIKey:  opts.AnthropicAPIKey,
-				RepoRoot:         opts.RepoRoot,
 				Verbose:          opts.Verbose,
 			})
 			agentDur := time.Since(agentStart)
@@ -208,7 +176,7 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 			cost := float64(agentResult.InputTokens)*3.0/1_000_000 + float64(agentResult.OutputTokens)*15.0/1_000_000
 			if agentResult.Success {
 				meta := buildCacheMetadata(opts, agentResult, "healed")
-				if saveErr := SaveCachedTest(opts.RepoRoot, opts.Remote, description, agentResult.StepsJSON, newVersion, meta, commit, push); saveErr != nil {
+				if saveErr := SaveCachedTest(opts.CacheDir, description, agentResult.StepsJSON, newVersion, meta); saveErr != nil {
 					logf("[lazycue] warning: save cached test: %v", saveErr)
 				}
 			}
@@ -243,7 +211,6 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 		Model:            opts.Model,
 		AnthropicBaseURL: opts.AnthropicBaseURL,
 		AnthropicAPIKey:  opts.AnthropicAPIKey,
-		RepoRoot:         opts.RepoRoot,
 		Verbose:          opts.Verbose,
 	})
 	agentDur := time.Since(agentStart)
@@ -254,7 +221,7 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 	cost := float64(agentResult.InputTokens)*3.0/1_000_000 + float64(agentResult.OutputTokens)*15.0/1_000_000
 	if agentResult.Success {
 		meta := buildCacheMetadata(opts, agentResult, "generated")
-		if saveErr := SaveCachedTest(opts.RepoRoot, opts.Remote, description, agentResult.StepsJSON, 1, meta, commit, push); saveErr != nil {
+		if saveErr := SaveCachedTest(opts.CacheDir, description, agentResult.StepsJSON, 1, meta); saveErr != nil {
 			logf("[lazycue] warning: save cached test: %v", saveErr)
 		}
 	}
@@ -282,15 +249,6 @@ func summarizeFailure(results []StepResult) string {
 		}
 	}
 	return "unknown failure"
-}
-
-// DetectRepoRoot returns the root of the git repository.
-func DetectRepoRoot() (string, error) {
-	out, err := gitExec(".", "rev-parse", "--show-toplevel")
-	if err != nil {
-		return "", err
-	}
-	return out, nil
 }
 
 // Harness holds options for running lazycue tests. Create one as a
@@ -354,7 +312,7 @@ func buildCacheMetadata(opts Options, agentResult *AgentResult, mode string) *Ca
 		OutputTokens:     agentResult.OutputTokens,
 		EstimatedCostUSD: cost,
 		CIRun:            detectCIRun(),
-		GitSHA:           detectGitSHA(opts.RepoRoot),
+		GitSHA:           detectGitSHA(),
 		Mode:             mode,
 	}
 }

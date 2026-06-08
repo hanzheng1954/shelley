@@ -11,9 +11,10 @@ cached instructions are re-used over and over again. When that eventually
 fails, an agent is invoked again to fix them up.
 
 Since we, as an industry, are not entirely comfortable with CI tooling that
-modifies the commit under test, the cache is externalized, but not too far:
-we use the git repo that LazyCue is being invoked from, and hide the
-cache in some git refs.
+mutates git refs behind the scenes, the cache is kept as ordinary tracked
+files in your repo: one JSON file per test description, living in a
+`.lazycue/` directory next to your tests. They get committed like any other
+source file.
 
 ## Quick Start
 
@@ -35,7 +36,7 @@ func TestHomepage(t *testing.T) {
 
 ## Workflow of a Run
 
-1. Hash description → check `refs/lazycue/<hash>/<commit>/v<N>` in git
+1. Hash description → look up `.lazycue/<hash>.json` next to your tests
 2. If cached: execute DSL steps. If passes → done (fast path, ~1-2s)
 3. If cached but fails mechanically: spawn LLM agent to fix → save new version
 4. If cached but app is genuinely broken: **fail the test with explanation**
@@ -80,20 +81,21 @@ go run github.com/boldsoftware/shelley/lazycue/cmd/lazycue@latest \
 
 ### CI Workflow
 
-In CI, use `--no-push` to save cache locally during the build, then `promote`
-to push refs to the remote only after the build succeeds:
+In CI, the cache files generated or healed during a green build are committed
+back to the repo (much like auto-formatting), so future runs hit the fast
+path:
 
 ```bash
 LAZY=github.com/boldsoftware/shelley/lazycue/cmd/lazycue@latest
 
-# Run tests without pushing cache to remote
-go run $LAZY --no-push --base-url http://localhost:3000 "test one" "test two"
+# Run tests; new/updated cache files land in .lazycue/
+go run $LAZY --base-url http://localhost:3000 "test one" "test two"
 
-# If CI passes, push cached refs to remote for future runs
-go run $LAZY promote --commit $(git rev-parse HEAD)
+# If CI passes, commit the cache files so future runs are fast
+git add .lazycue && git commit -m "Update LazyCue cache"
 ```
 
-This prevents broken tests from polluting the shared cache.
+The cache files are clearly marked as machine-managed; don't edit them by hand.
 
 ### Go Tests
 
@@ -125,76 +127,53 @@ The agent discovers app structure automatically via screenshots and `git grep`.
 | Flag / Option | Default | Description |
 |---------------|---------|-------------|
 | `--base-url` | | App URL (**required**) |
-| `--remote` | `origin` | Git remote for cache |
+| `--tests-file` | | File listing test descriptions; used to locate the default cache dir |
+| `--cache-dir` | `.lazycue` (next to `--tests-file` if set) | Directory holding cache JSON files |
 | `--model` | `claude-sonnet-4-6` | LLM model |
 | `--api-url` | `ANTHROPIC_BASE_URL` or `https://api.anthropic.com` | Anthropic API base URL |
 | `--api-key` | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `--verbose` | false | Verbose output |
-| `--no-push` | false | Save cache locally only (use with `promote`) |
-| `--no-fetch` | false | Use local cache only — don't fetch refs from the remote |
-| `--commit` | HEAD | Pin cache to a specific commit SHA; controls which cached tests are visible via git ancestry |
-
-### Subcommands
-
-**`promote`** — push locally saved cache refs to the remote:
-
-```bash
-go run github.com/boldsoftware/shelley/lazycue/cmd/lazycue@latest promote
-go run github.com/boldsoftware/shelley/lazycue/cmd/lazycue@latest promote --commit abc123...
-```
-
-Used after `--no-push` in CI to publish cache only when the build is green.
 
 ## How the Cache Works
 
-Cached tests live inside your git repo as **git refs pointing to blobs** —
-not as files in the working tree. Nothing shows up in `git status` or diffs.
+Cached tests live in a `.lazycue/` directory next to your tests, as tracked
+JSON files — one file per description. They show up in `git status` and
+diffs, and you commit them like any other source file.
 
 ### Storage
 
 When the agent generates or heals a test, it:
 
 1. Serializes the DSL steps + metadata to JSON
-2. Writes the JSON as a git blob (`git hash-object -w`)
-3. Creates a ref pointing to that blob (`git update-ref`)
-4. Pushes the ref to the remote (unless `--no-push`)
+2. Writes `.lazycue/<desc_hash>.json`, where `<desc_hash>` is the first 16 hex
+   chars of the SHA-256 of the test description
+3. Healing overwrites the same file, bumping `version` and setting `mode` to
+   `"healed"`
 
-The ref path encodes everything needed for lookup:
-
-```
-refs/lazycue/<desc_hash>/<commit_sha>/v<version>-<random>
-│                    │            │            │         │
-│                    │            │            │         └─ collision avoidance
-│                    │            │            └─ version (increments on heal)
-│                    │            └─ commit the test was generated against
-│                    └─ SHA-256 of the test description (first 16 hex chars)
-└─ namespace
-```
+Each file carries a `_README` banner marking it as machine-managed, so nobody
+hand-edits it. To change behavior, edit the test description and re-run
+LazyCue.
 
 ### Lookup
 
-On each run, the tool:
+On each run, the tool reads `.lazycue/<desc_hash>.json`. If it exists, the
+cached DSL is parsed and executed. If it's absent, the agent generates a fresh
+test. No git, no network, no ancestry — just a file read.
 
-1. Checks **local** refs first (no network)
-2. If no local hit, fetches refs from the remote (`git fetch origin refs/lazycue/*`)
-3. Finds all refs matching the description hash
-4. Filters by **git ancestry**: only refs whose commit is an ancestor of HEAD (or `--commit`)
-5. Picks the highest version number
-
-Ancestry filtering gives you branch isolation for free: a feature branch
-sees main's cache (main is an ancestor), but main doesn't see feature
-branch caches (the feature branch commit isn't an ancestor of main).
-
-### What's in the blob
+### What's in a cache file
 
 ```json
 {
+  "_README": "This file is managed by LazyCue ... Do NOT edit by hand ...",
+  "description": "Navigate to / and verify the page title is My App",
+  "version": 1,
   "steps": [
     {"action": "navigate", "url": "/"},
     {"action": "assert_title", "text": "My App"}
   ],
   "metadata": {
     "created_at": "2025-06-07T...",
+    "hostname": "ci-agent-1",
     "model": "claude-sonnet-4-6",
     "input_tokens": 12450,
     "output_tokens": 890,
@@ -208,9 +187,9 @@ branch caches (the feature branch commit isn't an ancestor of main).
 ### Inspecting
 
 ```bash
-# List all cached test refs
-git for-each-ref --format='%(refname)' 'refs/lazycue/'
+# List all cached tests
+ls .lazycue/
 
 # View a cached test
-git cat-file blob $(git rev-parse refs/lazycue/<hash>/<commit>/v1-abc123) | jq .
+jq . .lazycue/<hash>.json
 ```
