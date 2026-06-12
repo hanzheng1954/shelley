@@ -647,7 +647,6 @@ function MessageInput({
           onChange={handleFileSelect}
           className="message-input-hidden"
           multiple
-          accept="image/*,video/*,audio/*,.pdf,.txt,.md,.json,.csv,.xml,.html,.css,.js,.ts,.tsx,.jsx,.py,.go,.rs,.java,.c,.cpp,.h,.hpp,.sh,.yaml,.yml,.toml,.sql,.log,*"
           aria-hidden="true"
         />
         {attachments.length > 0 && (

@@ -151,6 +151,14 @@ test.describe('File Upload via Paste and Drag', () => {
     await expect(messageInput).toHaveValue('Hello, this is a test message');
   });
 
+  test('file picker does not restrict file types', async ({ page }) => {
+    await page.goto('/new');
+    await page.waitForLoadState('domcontentloaded');
+
+    const fileInput = page.locator('input[type="file"].message-input-hidden');
+    await expect(fileInput).not.toHaveAttribute('accept');
+  });
+
   test('simulated file drop shows attachment chip', async ({ page }) => {
     await page.goto('/new');
     await page.waitForLoadState('domcontentloaded');
