@@ -550,8 +550,9 @@ func (s *Server) staticHandler(fsys http.FileSystem) http.Handler {
 			return
 		}
 
-		// For JS and CSS files, serve from .gz files (only .gz versions are embedded)
-		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".css") {
+		// For JS, CSS, and source-map files, serve from .gz files (only the .gz
+		// versions are embedded to keep the binary small).
+		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".css") || strings.HasSuffix(r.URL.Path, ".map") {
 			gzPath := r.URL.Path + ".gz"
 			gzFile, err := fsys.Open(gzPath)
 			if err != nil {
@@ -582,7 +583,12 @@ func (s *Server) staticHandler(fsys http.FileSystem) http.Handler {
 				}
 			}
 
-			w.Header().Set("Content-Type", mime.TypeByExtension(filepath.Ext(r.URL.Path)))
+			contentType := mime.TypeByExtension(filepath.Ext(r.URL.Path))
+			if contentType == "" && strings.HasSuffix(r.URL.Path, ".map") {
+				// Source maps are JSON; mime has no registered type for .map.
+				contentType = "application/json; charset=utf-8"
+			}
+			w.Header().Set("Content-Type", contentType)
 			w.Header().Set("Vary", "Accept-Encoding")
 			// Use must-revalidate so browsers check ETag on each request.
 			// We can't use immutable since we don't have content-hashed filenames.

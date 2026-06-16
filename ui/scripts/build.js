@@ -34,6 +34,10 @@ function monacoExternalPlugin() {
 const isWatch = process.argv.includes('--watch');
 const isProd = !isWatch;
 const verbose = process.env.VERBOSE === '1' || process.env.VERBOSE === 'true';
+// Release builds (NO_SOURCEMAPS=1, set by release.yml) ship no JS source maps
+// to keep the embedded binary small. Other builds emit them (gzip-compressed)
+// so devtools work in development.
+const dropSourceMaps = process.env.NO_SOURCEMAPS === '1';
 
 function log(...args) {
   if (verbose) console.log(...args);
@@ -55,7 +59,7 @@ async function build() {
       outfile: 'dist/editor.worker.js',
       format: 'iife',
       minify: isProd,
-      sourcemap: true,
+      sourcemap: !dropSourceMaps,
     });
 
     // Build @pierre/diffs worker for syntax highlighting (IIFE format for web worker)
@@ -66,7 +70,7 @@ async function build() {
       outfile: 'dist/diffs-worker.js',
       format: 'iife',
       minify: isProd,
-      sourcemap: true,
+      sourcemap: !dropSourceMaps,
     });
 
     // Build Monaco editor as a separate chunk (JS + CSS).
@@ -81,7 +85,7 @@ async function build() {
       outfile: 'dist/monaco-editor.js',
       format: 'esm',
       minify: isProd,
-      sourcemap: true,
+      sourcemap: !dropSourceMaps,
       loader: {
         '.ttf': 'file',
       },
@@ -95,7 +99,7 @@ async function build() {
       outfile: 'dist/main.js',
       format: 'esm',
       minify: isProd,
-      sourcemap: true,
+      sourcemap: !dropSourceMaps,
       metafile: true,
       external: ['monaco-editor', '/monaco-editor.js'],
       // Prefer ESM entry points so dynamic imports (e.g. monaco-vim) end
@@ -217,6 +221,37 @@ async function build() {
 
         // Remove original to save space in embedded binary
         fs.unlinkSync(inputPath);
+      }
+    }
+
+    // Source maps are large (tens of MB uncompressed) and only fetched by
+    // browsers with devtools open. Release builds (NO_SOURCEMAPS=1, set by
+    // release.yml) drop them entirely; other builds gzip them so the embedded
+    // binary stays small while devtools still work. The server serves
+    // <name>.map from the embedded <name>.map.gz, exactly as for .js/.css.
+    log(dropSourceMaps ? '\nRemoving source maps...' : '\nGzipping source maps...');
+    for (const file of fs.readdirSync('dist')) {
+      if (dropSourceMaps) {
+        // dist/ isn't cleaned between builds, so also drop .map.gz left over
+        // from a previous dev build.
+        if (file.endsWith('.map') || file.endsWith('.map.gz')) {
+          fs.unlinkSync(`dist/${file}`);
+        }
+        continue;
+      }
+      if (!file.endsWith('.map')) continue;
+      const inputPath = `dist/${file}`;
+      const input = fs.readFileSync(inputPath);
+      const compressed = zlib.gzipSync(input, { level: 9 });
+      fs.writeFileSync(`${inputPath}.gz`, compressed);
+      // Record a content checksum so the server can emit ETags and answer 304s
+      // for source maps, matching the other compressed assets.
+      checksums[file] = crypto.createHash('sha256').update(compressed).digest('hex').slice(0, 16);
+      fs.unlinkSync(inputPath);
+      if (verbose) {
+        const origKb = (input.length / 1024).toFixed(1);
+        const gzKb = (compressed.length / 1024).toFixed(1);
+        console.log(`  ${file}: ${origKb} KB -> ${gzKb} KB gzip`);
       }
     }
 

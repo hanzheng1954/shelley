@@ -61,6 +61,10 @@ jobs:
           cache-dependency-path: ui/pnpm-lock.yaml
 
       - name: Build UI
+        env:
+          # Drop JS source maps from release binaries (~6MB compressed) since
+          # they're only useful with devtools open. Dev builds keep them.
+          NO_SOURCEMAPS: '1'
         run: |
           cd ui
           pnpm install --frozen-lockfile
