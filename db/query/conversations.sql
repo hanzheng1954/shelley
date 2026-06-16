@@ -19,6 +19,16 @@ SET draft = ?, updated_at = CURRENT_TIMESTAMP
 WHERE conversation_id = ? AND is_draft = TRUE
 RETURNING *;
 
+-- name: UpdateDraftConversationCwd :one
+-- Retargets the working directory of a draft conversation in place. The
+-- is_draft guard makes this atomic: a draft promoted concurrently yields
+-- no rows (ErrConversationNotDraft) rather than mutating an active
+-- conversation, whose cwd is immutable.
+UPDATE conversations
+SET cwd = ?, updated_at = CURRENT_TIMESTAMP
+WHERE conversation_id = ? AND is_draft = TRUE
+RETURNING *;
+
 -- name: PromoteDraftConversation :one
 -- Clears the draft state when the user sends the first message.
 UPDATE conversations

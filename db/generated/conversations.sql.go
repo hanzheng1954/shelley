@@ -1362,3 +1362,42 @@ func (q *Queries) UpdateConversationTimestamp(ctx context.Context, conversationI
 	_, err := q.db.ExecContext(ctx, updateConversationTimestamp, conversationID)
 	return err
 }
+
+const updateDraftConversationCwd = `-- name: UpdateDraftConversationCwd :one
+UPDATE conversations
+SET cwd = ?, updated_at = CURRENT_TIMESTAMP
+WHERE conversation_id = ? AND is_draft = TRUE
+RETURNING conversation_id, slug, user_initiated, created_at, updated_at, cwd, archived, parent_conversation_id, model, conversation_options, current_generation, agent_working, tags, is_draft, draft
+`
+
+type UpdateDraftConversationCwdParams struct {
+	Cwd            *string `json:"cwd"`
+	ConversationID string  `json:"conversation_id"`
+}
+
+// Retargets the working directory of a draft conversation in place. The
+// is_draft guard makes this atomic: a draft promoted concurrently yields
+// no rows (ErrConversationNotDraft) rather than mutating an active
+// conversation, whose cwd is immutable.
+func (q *Queries) UpdateDraftConversationCwd(ctx context.Context, arg UpdateDraftConversationCwdParams) (Conversation, error) {
+	row := q.db.QueryRowContext(ctx, updateDraftConversationCwd, arg.Cwd, arg.ConversationID)
+	var i Conversation
+	err := row.Scan(
+		&i.ConversationID,
+		&i.Slug,
+		&i.UserInitiated,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Cwd,
+		&i.Archived,
+		&i.ParentConversationID,
+		&i.Model,
+		&i.ConversationOptions,
+		&i.CurrentGeneration,
+		&i.AgentWorking,
+		&i.Tags,
+		&i.IsDraft,
+		&i.Draft,
+	)
+	return i, err
+}

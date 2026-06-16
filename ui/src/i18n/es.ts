@@ -77,6 +77,9 @@ export const es: TranslationKeys = {
   newConversationInMainRepo: "Nueva conversación en el repositorio principal",
   newConversationInNewWorktree: "Nueva conversación en nuevo worktree",
   createNewWorktree: "Crear un nuevo worktree de Git para esta conversación",
+  setWorkingDirToRepoRoot: "Establecer el directorio de trabajo en la raíz del repositorio git",
+  setWorkingDirToMainRepo:
+    "Establecer el directorio de trabajo en la raíz del worktree principal de git",
 
   // Conversation Drawer
   archived: "Archivadas",

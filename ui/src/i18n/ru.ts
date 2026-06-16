@@ -77,6 +77,8 @@ export const ru: TranslationKeys = {
   newConversationInMainRepo: "Новый диалог в основном репозитории",
   newConversationInNewWorktree: "Новый диалог в новом worktree",
   createNewWorktree: "Создать новый Git worktree для этого диалога",
+  setWorkingDirToRepoRoot: "Установить рабочий каталог в корень git-репозитория",
+  setWorkingDirToMainRepo: "Установить рабочий каталог в корень главного git worktree",
 
   // Conversation Drawer
   archived: "Архив",

@@ -77,6 +77,8 @@ export const ja: TranslationKeys = {
   newConversationInMainRepo: "メインリポジトリで新しい会話",
   newConversationInNewWorktree: "新しいWorktreeで新しい会話",
   createNewWorktree: "この会話用に新しいGit Worktreeを作成する",
+  setWorkingDirToRepoRoot: "作業ディレクトリを git リポジトリのルートに設定する",
+  setWorkingDirToMainRepo: "作業ディレクトリを git メインワークツリーのルートに設定する",
 
   // Conversation Drawer
   archived: "アーカイブ済み",

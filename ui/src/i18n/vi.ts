@@ -77,6 +77,8 @@ export const vi: TranslationKeys = {
   newConversationInMainRepo: "Hội thoại mới ở repo chính",
   newConversationInNewWorktree: "Hội thoại mới ở worktree mới",
   createNewWorktree: "Tạo Git worktree mới cho hội thoại",
+  setWorkingDirToRepoRoot: "Đặt thư mục làm việc về gốc kho git",
+  setWorkingDirToMainRepo: "Đặt thư mục làm việc về gốc worktree chính của git",
 
   // Conversation Drawer
   archived: "Danh sách lưu trữ",

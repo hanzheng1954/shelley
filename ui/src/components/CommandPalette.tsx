@@ -4,6 +4,7 @@ import { api } from "../services/api";
 import { messageStore } from "../services/messageStore";
 import { useMarkdown } from "../contexts/MarkdownContext";
 import { useI18n, type Locale } from "../i18n";
+import { tildifyPath } from "../utils/tildify";
 
 interface CommandItem {
   id: string;
@@ -18,6 +19,10 @@ interface CommandItem {
   // conversation into a separate tab.
   url?: string;
   keywords?: string[]; // Additional keywords for search
+  // Score boost added to this item's fuzzy-match score when it matches the
+  // query, so it sorts ahead of other matches. Used to make the git
+  // working-directory actions the top hits for a "git" search.
+  priority?: number;
 }
 
 interface CommandPaletteProps {
@@ -27,6 +32,9 @@ interface CommandPaletteProps {
   currentConversation: ConversationWithState | null;
   onNewConversation: () => void;
   onNewConversationWithCwd: (cwd: string) => void;
+  // onSetConversationCwd retargets the working directory of the conversation
+  // currently being composed in place, preserving any draft text.
+  onSetConversationCwd: (cwd: string) => void;
   onSelectConversation: (conversation: ConversationWithState) => void;
   onArchiveConversation: (conversationId: string) => void;
   onOpenDiffViewer: () => void;
@@ -84,6 +92,7 @@ function CommandPalette({
   currentConversation,
   onNewConversation,
   onNewConversationWithCwd,
+  onSetConversationCwd,
   onSelectConversation,
   onArchiveConversation,
   onOpenDiffViewer,
@@ -543,11 +552,13 @@ function CommandPalette({
       items.push({
         id: "set-dir-git-root",
         type: "action",
-        title: "Set new conversation dir to Git root",
+        title: `${t("setWorkingDirToRepoRoot")} (${tildifyPath(cwdRepoRoot)})`,
         subtitle: cwdRepoRoot,
         icon: folderIcon,
+        // Float to the top of "git" searches, ahead of git diff/graph/etc.
+        priority: 1000,
         action: () => {
-          onNewConversationWithCwd(cwdRepoRoot);
+          onSetConversationCwd(cwdRepoRoot);
           onClose();
         },
         keywords: [
@@ -568,11 +579,13 @@ function CommandPalette({
       items.push({
         id: "set-dir-git-workspace-root",
         type: "action",
-        title: "Set new conversation dir to Git workspace root",
+        title: `${t("setWorkingDirToMainRepo")} (${tildifyPath(cwdWorktreeRoot)})`,
         subtitle: cwdWorktreeRoot,
         icon: folderIcon,
+        // Float to the top of "git" searches, ahead of git diff/graph/etc.
+        priority: 1000,
         action: () => {
-          onNewConversationWithCwd(cwdWorktreeRoot);
+          onSetConversationCwd(cwdWorktreeRoot);
           onClose();
         },
         keywords: [
@@ -830,6 +843,7 @@ function CommandPalette({
     onOpenFeatureFlagsModal,
     onArchiveConversation,
     onNewConversationWithCwd,
+    onSetConversationCwd,
     onClose,
     hasCwd,
     currentConversation,
@@ -870,23 +884,31 @@ function CommandPalette({
   const displayItems = useMemo(() => {
     const trimmedQuery = query.trim();
 
-    // Filter actions based on query (client-side fuzzy match)
+    // Filter actions based on query (client-side fuzzy match), then sort by
+    // score so the best matches lead. Items with a `priority` get a boost
+    // added on top of their match score (e.g. the git working-directory
+    // actions float to the top of a "git" search). When there's no query we
+    // keep the original definition order.
     let filteredActions = actionItems;
     if (trimmedQuery) {
-      filteredActions = actionItems.filter((item) => {
-        let maxScore = fuzzyMatch(trimmedQuery, item.title);
-        if (item.subtitle) {
-          const subtitleScore = fuzzyMatch(trimmedQuery, item.subtitle);
-          if (subtitleScore > maxScore) maxScore = subtitleScore * 0.8;
-        }
-        if (item.keywords) {
-          for (const keyword of item.keywords) {
-            const keywordScore = fuzzyMatch(trimmedQuery, keyword);
-            if (keywordScore > maxScore) maxScore = keywordScore * 0.7;
+      filteredActions = actionItems
+        .map((item) => {
+          let maxScore = fuzzyMatch(trimmedQuery, item.title);
+          if (item.subtitle) {
+            const subtitleScore = fuzzyMatch(trimmedQuery, item.subtitle);
+            if (subtitleScore > maxScore) maxScore = subtitleScore * 0.8;
           }
-        }
-        return maxScore > 0;
-      });
+          if (item.keywords) {
+            for (const keyword of item.keywords) {
+              const keywordScore = fuzzyMatch(trimmedQuery, keyword);
+              if (keywordScore > maxScore) maxScore = keywordScore * 0.7;
+            }
+          }
+          return { item, score: maxScore > 0 ? maxScore + (item.priority ?? 0) : -1 };
+        })
+        .filter((entry) => entry.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map((entry) => entry.item);
     }
 
     // Use search results if we have a query, otherwise use initial conversations

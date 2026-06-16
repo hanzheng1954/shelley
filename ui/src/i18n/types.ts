@@ -77,6 +77,8 @@ export interface TranslationKeys {
   newConversationInMainRepo: string;
   newConversationInNewWorktree: string;
   createNewWorktree: string;
+  setWorkingDirToRepoRoot: string;
+  setWorkingDirToMainRepo: string;
 
   // Conversation Drawer
   archived: string;

@@ -153,6 +153,21 @@ class ApiService {
     return response.json();
   }
 
+  // updateDraftCwd retargets the working directory of a draft conversation
+  // in place, preserving the draft text. Returns 404 once the draft has been
+  // promoted (cwd is immutable thereafter); callers treat that as a no-op.
+  async updateDraftCwd(conversationId: string, cwd: string): Promise<Conversation> {
+    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}/draft-cwd`, {
+      method: "PUT",
+      headers: this.postHeaders,
+      body: JSON.stringify({ cwd }),
+    });
+    if (!response.ok) {
+      throw await responseError(response, "Failed to update draft cwd");
+    }
+    return response.json();
+  }
+
   async sendMessageWithNewConversation(request: ChatRequest): Promise<{ conversation_id: string }> {
     const response = await fetch(`${this.baseUrl}/conversations/new`, {
       method: "POST",

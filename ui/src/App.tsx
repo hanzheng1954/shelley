@@ -591,6 +591,29 @@ function App() {
     setCwdSyncTrigger((n) => n + 1);
   };
 
+  // Retarget the working directory of the conversation currently being
+  // composed, in place. Unlike startNewConversationWithCwd this never clears
+  // the current conversation, so a half-written draft survives the change.
+  // - No conversation yet (pure /new): just update the sticky cwd and nudge
+  //   ChatInterface to re-read it.
+  // - Draft conversation: also persist the new cwd to the draft row so a
+  //   reload keeps it.
+  const setConversationCwd = (cwd: string) => {
+    localStorage.setItem("shelley_selected_cwd", cwd);
+    const conv =
+      conversations.find((c) => c.conversation_id === currentConversationId) ||
+      (viewedConversation?.conversation_id === currentConversationId ? viewedConversation : null);
+    if (conv?.is_draft) {
+      api.updateDraftCwd(conv.conversation_id, cwd).catch((err) => {
+        // 404 once the draft has been promoted (its cwd is then immutable);
+        // that's expected, so log at a low level rather than as an error.
+        console.debug("Could not persist draft cwd (likely already promoted):", err);
+      });
+    }
+    // Force ChatInterface to re-read the cwd from localStorage in place.
+    setCwdSyncTrigger((n) => n + 1);
+  };
+
   const selectConversation = (conversation: Conversation) => {
     setCurrentConversationId(conversation.conversation_id);
     setViewedConversation(conversation);
@@ -841,6 +864,10 @@ function App() {
           }}
           onNewConversationWithCwd={(cwd: string) => {
             startNewConversationWithCwd(cwd);
+            setCommandPaletteOpen(false);
+          }}
+          onSetConversationCwd={(cwd: string) => {
+            setConversationCwd(cwd);
             setCommandPaletteOpen(false);
           }}
           onSelectConversation={(conversation) => {

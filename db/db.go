@@ -395,6 +395,27 @@ func (db *DB) UpdateDraft(ctx context.Context, conversationID, draft string) (*g
 	return &conv, err
 }
 
+// UpdateDraftCwd retargets the working directory of a draft conversation in
+// place, preserving its draft text. Returns ErrConversationNotDraft if the
+// conversation no longer exists as a draft (deleted, or promoted by a
+// concurrent chat post) so the caller doesn't mutate an active conversation.
+func (db *DB) UpdateDraftCwd(ctx context.Context, conversationID, cwd string) (*generated.Conversation, error) {
+	var conv generated.Conversation
+	err := db.pool.Tx(ctx, func(ctx context.Context, tx *Tx) error {
+		q := generated.New(tx.Conn())
+		var err error
+		conv, err = q.UpdateDraftConversationCwd(ctx, generated.UpdateDraftConversationCwdParams{
+			Cwd:            &cwd,
+			ConversationID: conversationID,
+		})
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrConversationNotDraft
+		}
+		return err
+	})
+	return &conv, err
+}
+
 // PromoteDraft clears is_draft and draft on a conversation. Callers gate
 // on the conversation's IsDraft flag (loaded in the same handler) before
 // invoking this, so the underlying UPDATE always matches a row. Returns

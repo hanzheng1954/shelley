@@ -77,6 +77,8 @@ export const upgoer5: TranslationKeys = {
   newConversationInMainRepo: "New Talk in Home Place",
   newConversationInNewWorktree: "New Talk in New Work Place",
   createNewWorktree: "Make a new work place for this talk",
+  setWorkingDirToRepoRoot: "Set work place to the top of this git code home",
+  setWorkingDirToMainRepo: "Set work place to the main git code home",
 
   // Conversation Drawer
   archived: "Put Away",

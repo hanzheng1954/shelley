@@ -987,6 +987,9 @@ func (s *Server) conversationMux() *http.ServeMux {
 	mux.HandleFunc("PUT /{id}/draft", func(w http.ResponseWriter, r *http.Request) {
 		s.handleUpdateDraft(w, r, r.PathValue("id"))
 	})
+	mux.HandleFunc("PUT /{id}/draft-cwd", func(w http.ResponseWriter, r *http.Request) {
+		s.handleUpdateDraftCwd(w, r, r.PathValue("id"))
+	})
 	mux.HandleFunc("POST /{id}/new-generation", func(w http.ResponseWriter, r *http.Request) {
 		s.handleStartNewGeneration(w, r, r.PathValue("id"))
 	})
@@ -3181,6 +3184,41 @@ func (s *Server) handleUpdateDraft(w http.ResponseWriter, r *http.Request, conve
 	}
 	if err != nil {
 		s.logger.Error("Failed to update draft", "conversationID", conversationID, "error", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(conv)
+}
+
+// UpdateDraftCwdRequest is the body for PUT /api/conversation/<id>/draft-cwd.
+type UpdateDraftCwdRequest struct {
+	Cwd string `json:"cwd"`
+}
+
+// handleUpdateDraftCwd retargets the working directory of a draft conversation
+// in place, without losing the draft text. Used by the command palette
+// "set working directory" actions so changing the dir doesn't discard the
+// message the user is composing. 404 when the conversation is not a draft
+// (its cwd is immutable once promoted).
+func (s *Server) handleUpdateDraftCwd(w http.ResponseWriter, r *http.Request, conversationID string) {
+	ctx := r.Context()
+	var req UpdateDraftCwdRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Cwd == "" {
+		http.Error(w, "cwd is required", http.StatusBadRequest)
+		return
+	}
+	conv, err := s.db.UpdateDraftCwd(ctx, conversationID, req.Cwd)
+	if errors.Is(err, db.ErrConversationNotDraft) {
+		http.Error(w, "Not a draft conversation", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		s.logger.Error("Failed to update draft cwd", "conversationID", conversationID, "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
