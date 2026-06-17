@@ -623,15 +623,14 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 	}, Display: display}
 }
 
-// GetTools returns all browser tools.
+// GetTools returns all browser tools. Emulation, network, accessibility, and
+// profiling are folded into the single combined "browser" tool via its
+// "action" field (emulate_*, network_*, accessibility_*, profile_*), so only
+// the combined tool and read_image are exposed as top-level tools.
 func (b *BrowseTools) GetTools() []*llm.Tool {
 	return []*llm.Tool{
 		b.CombinedTool(),
 		b.ReadImageTool(),
-		b.EmulateTool(),
-		b.NetworkTool(),
-		b.AccessibilityTool(),
-		b.ProfileTool(),
 	}
 }
 
@@ -674,7 +673,37 @@ func (b *BrowseTools) CombinedTool() *llm.Tool {
 
 - action: "screencast_status"
   Check if a screencast is active and how many frames have been captured.
-  No additional parameters.`
+  No additional parameters.
+
+Device & display emulation (emulate_* actions):
+- action: "emulate_help" — Show emulation help and the list of device presets.
+- action: "emulate_device" — Emulate a device preset. Parameters: device (string).
+- action: "emulate_custom" — Custom viewport. Parameters: width, height, device_scale_factor, mobile, touch.
+- action: "emulate_reset" — Clear all emulation overrides.
+- action: "emulate_dark_mode" — Toggle prefers-color-scheme: dark. Parameters: enabled (bool, default true).
+- action: "emulate_media" — Emulate a CSS media type. Parameters: media (e.g. "print").
+
+Network monitoring (network_* actions):
+- action: "network_help" — Show network help.
+- action: "network_enable" — Start capturing network requests.
+- action: "network_disable" — Stop capturing network requests.
+- action: "network_get_log" — Return captured requests. Parameters: limit (int, default 50), filter (URL substring).
+- action: "network_clear" — Clear the captured request log.
+- action: "network_cookies" — List cookies for the current page.
+- action: "network_clear_cache" — Clear the browser cache.
+
+Accessibility tree inspection (accessibility_* actions):
+- action: "accessibility_help" — Show accessibility help.
+- action: "accessibility_tree" — Dump the accessibility tree. Parameters: depth (int, 0=unlimited).
+- action: "accessibility_query" — Find nodes by name/role. Parameters: name, role.
+- action: "accessibility_node" — Inspect the node for a CSS selector. Parameters: selector.
+
+Performance profiling (profile_* actions):
+- action: "profile_help" — Show profiling help.
+- action: "profile_metrics" — Snapshot performance metrics.
+- action: "profile_cpu_start" / "profile_cpu_stop" — CPU profiling.
+- action: "profile_trace_start" / "profile_trace_stop" — Tracing. trace_start accepts categories (comma-separated).
+- action: "profile_coverage_start" / "profile_coverage_stop" — JS/CSS coverage.`
 
 	schema := `{
 		"type": "object",
@@ -682,7 +711,7 @@ func (b *BrowseTools) CombinedTool() *llm.Tool {
 			"action": {
 				"type": "string",
 				"description": "The browser action to perform",
-				"enum": ["navigate", "eval", "resize", "screenshot", "console_logs", "clear_console_logs", "screencast_start", "screencast_stop", "screencast_status"]
+				"enum": ["navigate", "eval", "resize", "screenshot", "console_logs", "clear_console_logs", "screencast_start", "screencast_stop", "screencast_status", "emulate_help", "emulate_device", "emulate_custom", "emulate_reset", "emulate_dark_mode", "emulate_media", "network_help", "network_enable", "network_disable", "network_get_log", "network_clear", "network_cookies", "network_clear_cache", "accessibility_help", "accessibility_tree", "accessibility_query", "accessibility_node", "profile_help", "profile_metrics", "profile_cpu_start", "profile_cpu_stop", "profile_trace_start", "profile_trace_stop", "profile_coverage_start", "profile_coverage_stop"]
 			},
 			"url": {
 				"type": "string",
@@ -735,6 +764,50 @@ func (b *BrowseTools) CombinedTool() *llm.Tool {
 			"every_nth_frame": {
 				"type": "integer",
 				"description": "Capture every Nth frame (screencast_start action, default 1)"
+			},
+			"device": {
+				"type": "string",
+				"description": "Device preset name (emulate_device action)"
+			},
+			"device_scale_factor": {
+				"type": "number",
+				"description": "Device scale factor / DPR (emulate_custom action, default 1.0)"
+			},
+			"mobile": {
+				"type": "boolean",
+				"description": "Emulate mobile device (emulate_custom action, default false)"
+			},
+			"touch": {
+				"type": "boolean",
+				"description": "Enable touch emulation (emulate_custom action, default false)"
+			},
+			"enabled": {
+				"type": "boolean",
+				"description": "Enable or disable (emulate_dark_mode action, default true)"
+			},
+			"media": {
+				"type": "string",
+				"description": "CSS media type to emulate, e.g. 'print' or 'screen' (emulate_media action)"
+			},
+			"filter": {
+				"type": "string",
+				"description": "Filter requests by URL substring (network_get_log action)"
+			},
+			"depth": {
+				"type": "integer",
+				"description": "Maximum accessibility tree depth (accessibility_tree action, 0=unlimited)"
+			},
+			"name": {
+				"type": "string",
+				"description": "Accessible name to search for (accessibility_query action)"
+			},
+			"role": {
+				"type": "string",
+				"description": "ARIA role to search for (accessibility_query action)"
+			},
+			"categories": {
+				"type": "string",
+				"description": "Comma-separated trace categories (profile_trace_start action, optional)"
 			}
 		},
 		"required": ["action"]
@@ -787,6 +860,25 @@ type combinedInput struct {
 	MaxWidth      int64  `json:"max_width,omitempty"`
 	MaxHeight     int64  `json:"max_height,omitempty"`
 	EveryNthFrame int64  `json:"every_nth_frame,omitempty"`
+
+	// Emulation fields (emulate_* actions).
+	Device            string  `json:"device,omitempty"`
+	DeviceScaleFactor float64 `json:"device_scale_factor,omitempty"`
+	Mobile            bool    `json:"mobile,omitempty"`
+	Touch             bool    `json:"touch,omitempty"`
+	Enabled           *bool   `json:"enabled,omitempty"`
+	Media             string  `json:"media,omitempty"`
+
+	// Network fields (network_* actions).
+	Filter string `json:"filter,omitempty"`
+
+	// Accessibility fields (accessibility_* actions).
+	Depth int    `json:"depth,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Role  string `json:"role,omitempty"`
+
+	// Profiling fields (profile_* actions).
+	Categories string `json:"categories,omitempty"`
 }
 
 func (b *BrowseTools) runCombined(ctx context.Context, input combinedInput) llm.ToolOut {
@@ -841,6 +933,65 @@ func (b *BrowseTools) runCombined(ctx context.Context, input combinedInput) llm.
 			"Screencast active (session %s): %d frames captured, running for %v",
 			sessionID, frameCount, elapsed.Round(time.Millisecond),
 		))}
+
+	// Emulation actions.
+	case "emulate_help":
+		return b.emulateHelp()
+	case "emulate_device":
+		return b.emulateDevice(emulateInput{Device: input.Device})
+	case "emulate_custom":
+		return b.emulateCustom(emulateInput{Width: int64(input.Width), Height: int64(input.Height), DeviceScaleFactor: input.DeviceScaleFactor, Mobile: input.Mobile, Touch: input.Touch})
+	case "emulate_reset":
+		return b.emulateReset()
+	case "emulate_dark_mode":
+		return b.emulateDarkMode(emulateInput{Enabled: input.Enabled})
+	case "emulate_media":
+		return b.emulateMedia(emulateInput{Media: input.Media})
+
+	// Network actions.
+	case "network_help":
+		return b.networkHelpRun()
+	case "network_enable":
+		return b.networkEnableRun()
+	case "network_disable":
+		return b.networkDisableRun()
+	case "network_get_log":
+		return b.networkGetLogRun(input.Limit, input.Filter)
+	case "network_clear":
+		return b.networkClearRun()
+	case "network_cookies":
+		return b.networkCookiesRun()
+	case "network_clear_cache":
+		return b.networkClearCacheRun()
+
+	// Accessibility actions.
+	case "accessibility_help":
+		return b.accessibilityHelp()
+	case "accessibility_tree":
+		return b.accessibilityTree(input.Depth)
+	case "accessibility_query":
+		return b.accessibilityQuery(input.Name, input.Role)
+	case "accessibility_node":
+		return b.accessibilityNode(input.Selector)
+
+	// Profiling actions.
+	case "profile_help":
+		return b.profileHelp()
+	case "profile_metrics":
+		return b.profileMetrics()
+	case "profile_cpu_start":
+		return b.profileCPUStart()
+	case "profile_cpu_stop":
+		return b.profileCPUStop()
+	case "profile_trace_start":
+		return b.profileTraceStart(input.Categories)
+	case "profile_trace_stop":
+		return b.profileTraceStop()
+	case "profile_coverage_start":
+		return b.profileCoverageStart()
+	case "profile_coverage_stop":
+		return b.profileCoverageStop()
+
 	default:
 		return llm.ErrorfToolOut("unknown action: %q", input.Action)
 	}

@@ -24,12 +24,8 @@ var ToolRegistry = []ToolInfo{
 	{Name: "subagent", Summary: "Spawn a subagent conversation.", DefaultOn: true},
 	{Name: "llm_one_shot", Summary: "One-shot prompt to another LLM.", DefaultOn: true},
 	{Name: "read_context_file", Summary: "Read a file from the orchestrator context dir.", DefaultOn: true},
-	{Name: "browser", Summary: "Browser automation (navigate, eval, screenshot, ...).", DefaultOn: true},
+	{Name: "browser", Summary: "Browser automation (navigate, eval, screenshot, emulate, network, accessibility, profile).", DefaultOn: true},
 	{Name: "read_image", Summary: "Read an image file for the model.", DefaultOn: true},
-	{Name: "browser_emulate", Summary: "Device/display emulation in the browser.", DefaultOn: true},
-	{Name: "browser_network", Summary: "Browser network inspection.", DefaultOn: true},
-	{Name: "browser_accessibility", Summary: "Browser accessibility tree inspection.", DefaultOn: true},
-	{Name: "browser_profile", Summary: "Browser performance profiling.", DefaultOn: true},
 }
 
 // IsToolEnabled reports whether a tool with the given name is enabled for a

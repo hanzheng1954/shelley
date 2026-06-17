@@ -89,97 +89,37 @@ func (b *BrowseTools) captureNetworkFinished(e *network.EventLoadingFinished) {
 	}
 }
 
-// networkInput is the input schema for the browser_network tool.
-type networkInput struct {
-	Action string `json:"action"`
-	Limit  int    `json:"limit,omitempty"`
-	Filter string `json:"filter,omitempty"`
-}
-
-// NetworkTool returns the browser_network tool for monitoring network requests.
-func (b *BrowseTools) NetworkTool() *llm.Tool {
-	description := `Network monitoring and inspection. Actions: help, enable, disable, get_log, clear, cookies, clear_cache.`
-
-	schema := `{
-		"type": "object",
-		"properties": {
-			"action": {
-				"type": "string",
-				"description": "The network action to perform",
-				"enum": ["help", "enable", "disable", "get_log", "clear", "cookies", "clear_cache"]
-			},
-			"limit": {
-				"type": "integer",
-				"description": "Max number of requests to return (get_log action, default 50)"
-			},
-			"filter": {
-				"type": "string",
-				"description": "Filter requests by URL substring (get_log action)"
-			}
-		},
-		"required": ["action"]
-	}`
-
-	return &llm.Tool{
-		Name:        "browser_network",
-		Description: description,
-		InputSchema: json.RawMessage(schema),
-		Run:         llm.RunJSON(b.networkRun),
-	}
-}
-
-func (b *BrowseTools) networkRun(ctx context.Context, input networkInput) llm.ToolOut {
-	switch input.Action {
-	case "help":
-		return b.networkHelpRun()
-	case "enable":
-		return b.networkEnableRun()
-	case "disable":
-		return b.networkDisableRun()
-	case "get_log":
-		return b.networkGetLogRun(input.Limit, input.Filter)
-	case "clear":
-		return b.networkClearRun()
-	case "cookies":
-		return b.networkCookiesRun()
-	case "clear_cache":
-		return b.networkClearCacheRun()
-	default:
-		return llm.ErrorfToolOut("unknown action: %q — use \"help\" to see available actions", input.Action)
-	}
-}
-
 func (b *BrowseTools) networkHelpRun() llm.ToolOut {
-	help := `browser_network — Monitor browser network activity.
+	help := `browser network monitoring — actions on the browser tool.
 
-Actions:
-  enable    — Start capturing network requests. Sets up listeners for HTTP
-              requests, responses, and loading events. Call this before
+Actions (pass as the browser tool's "action"):
+  network_enable    — Start capturing network requests. Sets up listeners for
+              HTTP requests, responses, and loading events. Call this before
               navigating to the page you want to monitor.
 
-  disable   — Stop capturing network requests. Previously captured requests
-              are retained until cleared.
+  network_disable   — Stop capturing network requests. Previously captured
+              requests are retained until cleared.
 
-  get_log   — Retrieve captured network requests as JSON.
+  network_get_log   — Retrieve captured network requests as JSON.
               Parameters:
                 limit  (int, default 50) — max entries to return (most recent)
                 filter (string)         — only include requests whose URL
                                           contains this substring
               Large outputs are written to a file and the path is returned.
 
-  clear     — Delete all captured network requests.
+  network_clear     — Delete all captured network requests.
 
-  cookies   — Return all browser cookies as JSON.
+  network_cookies   — Return all browser cookies as JSON.
 
-  clear_cache — Clear the browser HTTP cache. Useful when testing fresh
+  network_clear_cache — Clear the browser HTTP cache. Useful when testing fresh
               loads of pages or assets without restarting the browser.
               Does not affect cookies (cached content only).
 
 Typical workflow:
-  1. enable
+  1. network_enable
   2. navigate to a page with the browser tool
-  3. get_log to inspect requests
-  4. disable when done`
+  3. network_get_log to inspect requests
+  4. network_disable when done`
 
 	return llm.ToolOut{LLMContent: llm.TextContent(help)}
 }

@@ -769,40 +769,71 @@ func (s *PredictableService) makeToolSmorgasbordResponse(inputTokens uint64) *ll
 		ToolInput: json.RawMessage(consoleInput),
 	})
 
-	// browser_emulate tool
-	emulateInput, _ := json.Marshal(map[string]string{"action": "device", "device": "iphone_14"})
+	// browser: emulate_device action (folded-in emulation family)
+	emulateInput, _ := json.Marshal(map[string]string{"action": "emulate_device", "device": "iphone_14"})
 	content = append(content, llm.Content{
 		ID:        fmt.Sprintf("tool_emulate_%d", (baseNano+9)%1000),
 		Type:      llm.ContentTypeToolUse,
-		ToolName:  "browser_emulate",
+		ToolName:  "browser",
 		ToolInput: json.RawMessage(emulateInput),
 	})
 
-	// browser_network tool
-	networkInput, _ := json.Marshal(map[string]string{"action": "enable"})
+	// browser: network_enable action (folded-in network family)
+	networkInput, _ := json.Marshal(map[string]string{"action": "network_enable"})
 	content = append(content, llm.Content{
 		ID:        fmt.Sprintf("tool_network_%d", (baseNano+10)%1000),
 		Type:      llm.ContentTypeToolUse,
-		ToolName:  "browser_network",
+		ToolName:  "browser",
 		ToolInput: json.RawMessage(networkInput),
 	})
 
-	// browser_accessibility tool
-	accessibilityInput, _ := json.Marshal(map[string]string{"action": "tree"})
+	// browser: accessibility_tree action (folded-in accessibility family)
+	accessibilityInput, _ := json.Marshal(map[string]string{"action": "accessibility_tree"})
 	content = append(content, llm.Content{
 		ID:        fmt.Sprintf("tool_a11y_%d", (baseNano+11)%1000),
 		Type:      llm.ContentTypeToolUse,
-		ToolName:  "browser_accessibility",
+		ToolName:  "browser",
 		ToolInput: json.RawMessage(accessibilityInput),
 	})
 
-	// browser_profile tool
-	profileInput, _ := json.Marshal(map[string]string{"action": "metrics"})
+	// browser: profile_metrics action (folded-in profiling family)
+	profileInput, _ := json.Marshal(map[string]string{"action": "profile_metrics"})
 	content = append(content, llm.Content{
 		ID:        fmt.Sprintf("tool_profile_%d", (baseNano+12)%1000),
 		Type:      llm.ContentTypeToolUse,
-		ToolName:  "browser_profile",
+		ToolName:  "browser",
 		ToolInput: json.RawMessage(profileInput),
+	})
+
+	// Backwards-compat: old standalone browser_* tool names from existing DBs.
+	// These must still render with their specialized components.
+	oldEmulateInput, _ := json.Marshal(map[string]string{"action": "device", "device": "ipad"})
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_old_emulate_%d", (baseNano+16)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "browser_emulate",
+		ToolInput: json.RawMessage(oldEmulateInput),
+	})
+	oldNetworkInput, _ := json.Marshal(map[string]string{"action": "enable"})
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_old_network_%d", (baseNano+17)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "browser_network",
+		ToolInput: json.RawMessage(oldNetworkInput),
+	})
+	oldA11yInput, _ := json.Marshal(map[string]string{"action": "tree"})
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_old_a11y_%d", (baseNano+18)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "browser_accessibility",
+		ToolInput: json.RawMessage(oldA11yInput),
+	})
+	oldProfileInput, _ := json.Marshal(map[string]string{"action": "metrics"})
+	content = append(content, llm.Content{
+		ID:        fmt.Sprintf("tool_old_profile_%d", (baseNano+19)%1000),
+		Type:      llm.ContentTypeToolUse,
+		ToolName:  "browser_profile",
+		ToolInput: json.RawMessage(oldProfileInput),
 	})
 
 	// llm_one_shot tool

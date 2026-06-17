@@ -49,18 +49,44 @@ func TestCombinedTool(t *testing.T) {
 		t.Error("action should be required")
 	}
 
-	// Verify all actions are listed in the enum
-	expectedActions := []string{"navigate", "eval", "resize", "console_logs", "clear_console_logs", "screenshot"}
+	// Verify all actions are listed in the enum, including the folded-in
+	// emulate_*/network_*/accessibility_*/profile_* families.
+	expectedActions := []string{
+		"navigate", "eval", "resize", "console_logs", "clear_console_logs", "screenshot",
+		"emulate_device", "emulate_custom", "emulate_reset", "emulate_dark_mode", "emulate_media",
+		"network_enable", "network_get_log", "network_cookies", "network_clear_cache",
+		"accessibility_tree", "accessibility_query", "accessibility_node",
+		"profile_metrics", "profile_cpu_start", "profile_trace_start", "profile_coverage_start",
+	}
 	for _, action := range expectedActions {
 		if !slices.Contains(schema.Properties["action"].Enum, action) {
 			t.Errorf("action %q not in enum", action)
 		}
 	}
 
-	// Verify description mentions all actions
-	for _, keyword := range []string{"navigate", "eval", "resize", "console_logs", "screenshot"} {
+	// Verify description mentions all action families.
+	for _, keyword := range []string{"navigate", "eval", "resize", "console_logs", "screenshot", "emulate_", "network_", "accessibility_", "profile_"} {
 		if !strings.Contains(tool.Description, keyword) {
 			t.Errorf("description missing %q", keyword)
+		}
+	}
+}
+
+// TestCombinedToolFoldedActions verifies the help actions of the folded-in
+// families dispatch through the combined browser tool without needing a live
+// browser (help actions are pure text).
+func TestCombinedToolFoldedActions(t *testing.T) {
+	tools := NewBrowseTools(context.Background(), 0)
+	t.Cleanup(func() { tools.Close() })
+
+	tool := tools.CombinedTool()
+	for _, action := range []string{"emulate_help", "network_help", "accessibility_help", "profile_help"} {
+		out := tool.Run(context.Background(), []byte(fmt.Sprintf(`{"action": %q}`, action)))
+		if out.Error != nil {
+			t.Errorf("action %q returned error: %v", action, out.Error)
+		}
+		if len(out.LLMContent) == 0 || out.LLMContent[0].Text == "" {
+			t.Errorf("action %q returned no help text", action)
 		}
 	}
 }
@@ -85,10 +111,10 @@ func TestGetTools(t *testing.T) {
 	})
 
 	result := tools.GetTools()
-	if len(result) != 6 {
-		t.Fatalf("GetTools: expected 6 tools, got %d", len(result))
+	if len(result) != 2 {
+		t.Fatalf("GetTools: expected 2 tools, got %d", len(result))
 	}
-	expectedNames := []string{"browser", "read_image", "browser_emulate", "browser_network", "browser_accessibility", "browser_profile"}
+	expectedNames := []string{"browser", "read_image"}
 	for i, name := range expectedNames {
 		if result[i].Name != name {
 			t.Errorf("expected tool %d name %q, got %q", i, name, result[i].Name)
@@ -658,10 +684,10 @@ func TestRegisterBrowserTools(t *testing.T) {
 	tools, cleanup := RegisterBrowserTools(ctx)
 	t.Cleanup(cleanup)
 
-	if len(tools) != 6 {
-		t.Fatalf("RegisterBrowserTools: expected 6 tools, got %d", len(tools))
+	if len(tools) != 2 {
+		t.Fatalf("RegisterBrowserTools: expected 2 tools, got %d", len(tools))
 	}
-	expectedNames := []string{"browser", "read_image", "browser_emulate", "browser_network", "browser_accessibility", "browser_profile"}
+	expectedNames := []string{"browser", "read_image"}
 	for i, name := range expectedNames {
 		if tools[i].Name != name {
 			t.Errorf("expected tool %d name %q, got %q", i, name, tools[i].Name)

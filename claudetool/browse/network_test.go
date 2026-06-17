@@ -48,7 +48,7 @@ func TestBrowserNetworkClearCache(t *testing.T) {
 	t.Cleanup(func() { server.Close() })
 
 	browser := tools.CombinedTool()
-	netTool := tools.NetworkTool()
+	netTool := tools.CombinedTool()
 
 	navURL := fmt.Sprintf(`{"action": "navigate", "url": "http://127.0.0.1:%d/cached"}`, port)
 	readHits := []byte(`{"action": "eval", "expression": "document.getElementById('hits').textContent"}`)
@@ -85,7 +85,7 @@ func TestBrowserNetworkClearCache(t *testing.T) {
 	}
 
 	// Clear the browser cache.
-	out = netTool.Run(ctx, []byte(`{"action": "clear_cache"}`))
+	out = netTool.Run(ctx, []byte(`{"action": "network_clear_cache"}`))
 	if out.Error != nil {
 		t.Fatalf("clear_cache: %v", out.Error)
 	}

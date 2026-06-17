@@ -400,7 +400,7 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 
 	var cleanup func()
 	anyBrowserToolEnabled := false
-	for _, name := range []string{"browser", "read_image", "browser_emulate", "browser_network", "browser_accessibility", "browser_profile"} {
+	for _, name := range []string{"browser", "read_image"} {
 		if IsToolEnabled(name, cfg.ToolOverrides, cfg.DisableAllTools) {
 			anyBrowserToolEnabled = true
 			break

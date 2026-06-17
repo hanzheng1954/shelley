@@ -119,6 +119,23 @@ test.describe('Tool Component Verification', () => {
     await verifyPill('browser', 'console_logs', async (modal) => {
       await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📋' }).first()).toBeAttached();
     });
+    // The emulate/network/accessibility/profile families are now folded into
+    // the single "browser" tool via `<family>_<sub>` actions. Verify they
+    // render with their specialized component (correct emoji) under that name.
+    await verifyPill('browser', 'emulate_device', async (modal) => {
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📱' }).first()).toBeAttached();
+    });
+    await verifyPill('browser', 'network_enable', async (modal) => {
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📡' }).first()).toBeAttached();
+    });
+    await verifyPill('browser', 'accessibility_tree', async (modal) => {
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '♿' }).first()).toBeAttached();
+    });
+    await verifyPill('browser', 'profile_metrics', async (modal) => {
+      await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📊' }).first()).toBeAttached();
+    });
+    // Backwards-compat: old standalone browser_* tool names must still render
+    // with their specialized components (for conversations in existing DBs).
     await verifyPill('browser_emulate', null, async (modal) => {
       await expect(modal.locator('.tool .tool-emoji').filter({ hasText: '📱' }).first()).toBeAttached();
     });

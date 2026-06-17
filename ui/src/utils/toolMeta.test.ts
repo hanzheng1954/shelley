@@ -127,4 +127,19 @@ run("emoji unchanged for shell", () => {
   assert(toolEmoji("bash") === "\u{1F6E0}\uFE0F", "wrench");
 });
 
+run("umbrella browser tool picks per-family emoji for folded-in actions", () => {
+  const cases: Array<[string, string]> = [
+    ["emulate_device", "\u{1F4F1}"],
+    ["network_enable", "\u{1F4E1}"],
+    ["accessibility_tree", "\u267F"],
+    ["profile_metrics", "\u{1F4CA}"],
+    ["navigate", "\u{1F310}"],
+    ["eval", "\u26A1"],
+  ];
+  for (const [action, emoji] of cases) {
+    const got = toolEmoji("browser", { action });
+    assert(got === emoji, `browser ${action} -> ${got}, want ${emoji}`);
+  }
+});
+
 console.log("\ntoolMeta tests passed");

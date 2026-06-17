@@ -18,7 +18,8 @@ function browserAction(input: unknown): string {
 export function toolEmoji(name: string | undefined | null, input?: unknown): string {
   if (!name) return "⚙️";
   if (name === "browser") {
-    switch (browserAction(input)) {
+    const action = browserAction(input);
+    switch (action) {
       case "navigate":
         return "🌐";
       case "eval":
@@ -35,6 +36,11 @@ export function toolEmoji(name: string | undefined | null, input?: unknown): str
       case "screencast_status":
         return "🎬";
     }
+    // Folded-in families: emulate_*, network_*, accessibility_*, profile_*.
+    if (action.startsWith("emulate")) return "📱";
+    if (action.startsWith("network")) return "📡";
+    if (action.startsWith("accessibility")) return "♿";
+    if (action.startsWith("profile")) return "📊";
   }
   switch (name) {
     case "bash":

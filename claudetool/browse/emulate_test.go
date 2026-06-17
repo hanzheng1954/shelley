@@ -78,7 +78,7 @@ func newEmulateTestEnv(t *testing.T) *emulateTestEnv {
 
 	return &emulateTestEnv{
 		ctx:          ctx,
-		emuTool:      tools.EmulateTool(),
+		emuTool:      tools.CombinedTool(),
 		getUserAgent: getUserAgent,
 		baselineUA:   baselineUA,
 	}
@@ -96,7 +96,7 @@ func TestEmulateDeviceSwitchClearsUserAgent(t *testing.T) {
 	env := newEmulateTestEnv(t)
 
 	// Step 1: Emulate iphone_14 — UA should contain "iPhone".
-	toolOut := env.emuTool.Run(env.ctx, []byte(`{"action": "device", "device": "iphone_14"}`))
+	toolOut := env.emuTool.Run(env.ctx, []byte(`{"action": "emulate_device", "device": "iphone_14"}`))
 	if toolOut.Error != nil {
 		if strings.Contains(toolOut.Error.Error(), "failed to start browser") {
 			t.Skip("Browser automation not available in this environment")
@@ -111,7 +111,7 @@ func TestEmulateDeviceSwitchClearsUserAgent(t *testing.T) {
 	t.Logf("After iphone_14: UA=%s", ua)
 
 	// Step 2: Switch to desktop_hd — UA should NOT contain "iPhone".
-	toolOut = env.emuTool.Run(env.ctx, []byte(`{"action": "device", "device": "desktop_hd"}`))
+	toolOut = env.emuTool.Run(env.ctx, []byte(`{"action": "emulate_device", "device": "desktop_hd"}`))
 	if toolOut.Error != nil {
 		t.Fatalf("Emulate desktop_hd error: %v", toolOut.Error)
 	}
@@ -139,7 +139,7 @@ func TestEmulateDeviceToCustomClearsUserAgent(t *testing.T) {
 	env := newEmulateTestEnv(t)
 
 	// Step 1: Emulate iphone_14 — UA should contain "iPhone".
-	toolOut := env.emuTool.Run(env.ctx, []byte(`{"action": "device", "device": "iphone_14"}`))
+	toolOut := env.emuTool.Run(env.ctx, []byte(`{"action": "emulate_device", "device": "iphone_14"}`))
 	if toolOut.Error != nil {
 		if strings.Contains(toolOut.Error.Error(), "failed to start browser") {
 			t.Skip("Browser automation not available in this environment")
@@ -154,7 +154,7 @@ func TestEmulateDeviceToCustomClearsUserAgent(t *testing.T) {
 	t.Logf("After iphone_14: UA=%s", ua)
 
 	// Step 2: Switch to a custom viewport — UA should revert to baseline.
-	toolOut = env.emuTool.Run(env.ctx, []byte(`{"action": "custom", "width": 1280, "height": 800}`))
+	toolOut = env.emuTool.Run(env.ctx, []byte(`{"action": "emulate_custom", "width": 1280, "height": 800}`))
 	if toolOut.Error != nil {
 		t.Fatalf("Emulate custom error: %v", toolOut.Error)
 	}

@@ -17,100 +17,43 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-// profileInput is the input schema for the browser_profile tool.
-type profileInput struct {
-	Action     string `json:"action"`
-	Categories string `json:"categories,omitempty"`
-}
-
-// ProfileTool returns the browser_profile tool for performance profiling and tracing.
-func (b *BrowseTools) ProfileTool() *llm.Tool {
-	description := `Performance profiling and tracing. Actions: help, metrics, cpu_start, cpu_stop, trace_start, trace_stop, coverage_start, coverage_stop.`
-
-	schema := `{
-		"type": "object",
-		"properties": {
-			"action": {
-				"type": "string",
-				"description": "The profiling action to perform",
-				"enum": ["help", "metrics", "cpu_start", "cpu_stop", "trace_start", "trace_stop", "coverage_start", "coverage_stop"]
-			},
-			"categories": {
-				"type": "string",
-				"description": "Comma-separated trace categories (trace_start action, optional)"
-			}
-		},
-		"required": ["action"]
-	}`
-
-	return &llm.Tool{
-		Name:        "browser_profile",
-		Description: description,
-		InputSchema: json.RawMessage(schema),
-		Run:         llm.RunJSON(b.profileRun),
-	}
-}
-
-func (b *BrowseTools) profileRun(ctx context.Context, input profileInput) llm.ToolOut {
-	switch input.Action {
-	case "help":
-		return b.profileHelp()
-	case "metrics":
-		return b.profileMetrics()
-	case "cpu_start":
-		return b.profileCPUStart()
-	case "cpu_stop":
-		return b.profileCPUStop()
-	case "trace_start":
-		return b.profileTraceStart(input.Categories)
-	case "trace_stop":
-		return b.profileTraceStop()
-	case "coverage_start":
-		return b.profileCoverageStart()
-	case "coverage_stop":
-		return b.profileCoverageStop()
-	default:
-		return llm.ErrorfToolOut("unknown action: %q — use \"help\" to see available actions", input.Action)
-	}
-}
-
 func (b *BrowseTools) profileHelp() llm.ToolOut {
-	help := `browser_profile — Performance profiling and tracing.
+	help := `browser performance profiling — actions on the browser tool.
 
-Actions:
-  help            — Show this help message.
+Actions (pass as the browser tool's "action"):
+  profile_help            — Show this help message.
 
-  metrics         — Get a snapshot of performance metrics from the browser.
-                    Returns timing, memory, DOM, and layout metrics as an
-                    aligned text table.
+  profile_metrics         — Get a snapshot of performance metrics from the
+                    browser. Returns timing, memory, DOM, and layout metrics
+                    as an aligned text table.
 
-  cpu_start       — Start CPU profiling via the Chrome DevTools Profiler.
-                    The profiler records JavaScript execution samples.
+  profile_cpu_start       — Start CPU profiling via the Chrome DevTools
+                    Profiler. Records JavaScript execution samples.
 
-  cpu_stop        — Stop CPU profiling and save the profile to a JSON file.
-                    Returns the file path. The file can be loaded in Chrome
-                    DevTools (Performance tab) for analysis.
+  profile_cpu_stop        — Stop CPU profiling and save the profile to a JSON
+                    file. Returns the file path. The file can be loaded in
+                    Chrome DevTools (Performance tab) for analysis.
 
-  trace_start     — Start a Chrome trace recording.
+  profile_trace_start     — Start a Chrome trace recording.
                     Parameters:
                       categories (string, optional) — comma-separated trace
                         categories, e.g. "devtools.timeline,v8.execute".
                         If omitted, default categories are used.
 
-  trace_stop      — Stop tracing and save the trace to a JSON file.
+  profile_trace_stop      — Stop tracing and save the trace to a JSON file.
                     Returns the file path and event count. The file can be
                     loaded in Chrome DevTools (Performance tab) or
                     chrome://tracing.
 
-  coverage_start  — Start collecting precise JavaScript code coverage.
+  profile_coverage_start  — Start collecting precise JavaScript code coverage.
 
-  coverage_stop   — Stop coverage collection and save results to a JSON file.
-                    Returns the file path with per-script coverage data.
+  profile_coverage_stop   — Stop coverage collection and save results to a JSON
+                    file. Returns the file path with per-script coverage data.
 
 Typical workflows:
-  CPU profiling:  cpu_start → interact with page → cpu_stop
-  Tracing:        trace_start → interact with page → trace_stop
-  Coverage:       coverage_start → interact with page → coverage_stop`
+  CPU profiling:  profile_cpu_start → interact with page → profile_cpu_stop
+  Tracing:        profile_trace_start → interact → profile_trace_stop
+  Coverage:       profile_coverage_start → interact → profile_coverage_stop`
 
 	return llm.ToolOut{LLMContent: llm.TextContent(help)}
 }

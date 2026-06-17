@@ -16,94 +16,30 @@ import (
 	"shelley.exe.dev/llm"
 )
 
-// accessibilityInput is the input for the accessibility tool.
-type accessibilityInput struct {
-	Action   string `json:"action"`
-	Depth    int    `json:"depth,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Role     string `json:"role,omitempty"`
-	Selector string `json:"selector,omitempty"`
-}
-
-// AccessibilityTool returns a tool for inspecting the accessibility tree.
-func (b *BrowseTools) AccessibilityTool() *llm.Tool {
-	description := `Accessibility tree inspection. Actions: help, tree, query, node.`
-
-	schema := `{
-		"type": "object",
-		"properties": {
-			"action": {
-				"type": "string",
-				"description": "The accessibility action to perform",
-				"enum": ["help", "tree", "query", "node"]
-			},
-			"depth": {
-				"type": "integer",
-				"description": "Maximum tree depth (tree action, 0=unlimited)"
-			},
-			"name": {
-				"type": "string",
-				"description": "Accessible name to search for (query action)"
-			},
-			"role": {
-				"type": "string",
-				"description": "ARIA role to search for (query action)"
-			},
-			"selector": {
-				"type": "string",
-				"description": "CSS selector for element (node action)"
-			}
-		},
-		"required": ["action"]
-	}`
-
-	return &llm.Tool{
-		Name:        "browser_accessibility",
-		Description: description,
-		InputSchema: json.RawMessage(schema),
-		Run:         llm.RunJSON(b.accessibilityRun),
-	}
-}
-
-func (b *BrowseTools) accessibilityRun(ctx context.Context, input accessibilityInput) llm.ToolOut {
-	switch input.Action {
-	case "help":
-		return b.accessibilityHelp()
-	case "tree":
-		return b.accessibilityTree(input.Depth)
-	case "query":
-		return b.accessibilityQuery(input.Name, input.Role)
-	case "node":
-		return b.accessibilityNode(input.Selector)
-	default:
-		return llm.ErrorfToolOut("unknown action: %q (use help, tree, query, or node)", input.Action)
-	}
-}
-
 func (b *BrowseTools) accessibilityHelp() llm.ToolOut {
-	helpText := `Accessibility Tree Inspection Tool
+	helpText := `Accessibility Tree Inspection — actions on the browser tool.
 
-Actions:
+Actions (pass as the browser tool's "action"):
 
-  tree - Get the full accessibility tree
+  accessibility_tree - Get the full accessibility tree
     Parameters:
       depth (int, optional): Maximum depth to retrieve. 0 or omitted = unlimited.
-    Example: {"action": "tree", "depth": 3}
+    Example: {"action": "accessibility_tree", "depth": 3}
 
-  query - Search for nodes by accessible name and/or role
+  accessibility_query - Search for nodes by accessible name and/or role
     Parameters:
       name (string, optional): Accessible name to match.
       role (string, optional): ARIA role to match.
       At least one of name or role should be provided.
-    Example: {"action": "query", "role": "button"}
-    Example: {"action": "query", "name": "Submit"}
+    Example: {"action": "accessibility_query", "role": "button"}
+    Example: {"action": "accessibility_query", "name": "Submit"}
 
-  node - Get accessibility info for a specific DOM element
+  accessibility_node - Get accessibility info for a specific DOM element
     Parameters:
       selector (string, required): CSS selector for the element.
-    Example: {"action": "node", "selector": "#login-button"}
+    Example: {"action": "accessibility_node", "selector": "#login-button"}
 
-  help - Show this help text
+  accessibility_help - Show this help text
 
 Output format:
   tree: Indented tree showing [role] "name" (properties) for each node.

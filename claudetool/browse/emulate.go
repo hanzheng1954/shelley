@@ -2,7 +2,6 @@ package browse
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -57,104 +56,30 @@ var devicePresets = map[string]devicePreset{
 	},
 }
 
+// emulateInput carries parameters for the emulate_* browser actions. It is
+// populated by runCombined from the combined browser tool input.
 type emulateInput struct {
-	Action            string  `json:"action"`
-	Device            string  `json:"device"`
-	Width             int64   `json:"width"`
-	Height            int64   `json:"height"`
-	DeviceScaleFactor float64 `json:"device_scale_factor"`
-	Mobile            bool    `json:"mobile"`
-	Touch             bool    `json:"touch"`
-	Enabled           *bool   `json:"enabled"`
-	Media             string  `json:"media"`
-}
-
-// EmulateTool returns a tool for device and display emulation.
-func (b *BrowseTools) EmulateTool() *llm.Tool {
-	description := "Device and display emulation. Actions: help, device, custom, reset, dark_mode, media."
-
-	schema := `{
-		"type": "object",
-		"properties": {
-			"action": {
-				"type": "string",
-				"description": "The emulation action to perform",
-				"enum": ["help", "device", "custom", "reset", "dark_mode", "media"]
-			},
-			"device": {
-				"type": "string",
-				"description": "Device preset name (device action)"
-			},
-			"width": {
-				"type": "integer",
-				"description": "Viewport width in pixels (custom action)"
-			},
-			"height": {
-				"type": "integer",
-				"description": "Viewport height in pixels (custom action)"
-			},
-			"device_scale_factor": {
-				"type": "number",
-				"description": "Device scale factor / DPR (custom action, default 1.0)"
-			},
-			"mobile": {
-				"type": "boolean",
-				"description": "Emulate mobile device (custom action, default false)"
-			},
-			"touch": {
-				"type": "boolean",
-				"description": "Enable touch emulation (custom action, default false)"
-			},
-			"enabled": {
-				"type": "boolean",
-				"description": "Enable or disable (dark_mode action, default true)"
-			},
-			"media": {
-				"type": "string",
-				"description": "CSS media type to emulate, e.g. 'print' or 'screen' (media action)"
-			}
-		},
-		"required": ["action"]
-	}`
-
-	return &llm.Tool{
-		Name:        "browser_emulate",
-		Description: description,
-		InputSchema: json.RawMessage(schema),
-		Run:         llm.RunJSON(b.emulateRun),
-	}
-}
-
-func (b *BrowseTools) emulateRun(ctx context.Context, input emulateInput) llm.ToolOut {
-	switch input.Action {
-	case "help":
-		return b.emulateHelp()
-	case "device":
-		return b.emulateDevice(input)
-	case "custom":
-		return b.emulateCustom(input)
-	case "reset":
-		return b.emulateReset()
-	case "dark_mode":
-		return b.emulateDarkMode(input)
-	case "media":
-		return b.emulateMedia(input)
-	default:
-		return llm.ErrorfToolOut("unknown action: %q", input.Action)
-	}
+	Device            string
+	Width             int64
+	Height            int64
+	DeviceScaleFactor float64
+	Mobile            bool
+	Touch             bool
+	Enabled           *bool
+	Media             string
 }
 
 func (b *BrowseTools) emulateHelp() llm.ToolOut {
 	var sb strings.Builder
-	sb.WriteString("Device Emulation Tool\n")
-	sb.WriteString("=====================\n\n")
-	sb.WriteString("Actions:\n")
-	sb.WriteString("  help      - Show this help message\n")
-	sb.WriteString("  device    - Emulate a preset device (param: device)\n")
-	sb.WriteString("  custom    - Custom viewport emulation (params: width, height, device_scale_factor, mobile, touch); clears any prior UA override\n")
-	sb.WriteString("  reset     - Reset to default viewport (1280x720)\n")
-	sb.WriteString("  dark_mode - Toggle automatic dark mode (param: enabled, default true)\n")
-	sb.WriteString("  media     - Emulate CSS media type (param: media, e.g. 'print', 'screen')\n")
+	sb.WriteString("Device Emulation — actions on the browser tool.\n")
+	sb.WriteString("=======================================\n\n")
+	sb.WriteString("Actions (pass as the browser tool's \"action\"):\n")
+	sb.WriteString("  emulate_help      - Show this help message\n")
+	sb.WriteString("  emulate_device    - Emulate a preset device (param: device)\n")
+	sb.WriteString("  emulate_custom    - Custom viewport emulation (params: width, height, device_scale_factor, mobile, touch); clears any prior UA override\n")
+	sb.WriteString("  emulate_reset     - Reset to default viewport (1280x720)\n")
+	sb.WriteString("  emulate_dark_mode - Toggle automatic dark mode (param: enabled, default true)\n")
+	sb.WriteString("  emulate_media     - Emulate CSS media type (param: media, e.g. 'print', 'screen')\n")
 	sb.WriteString("\nAvailable device presets:\n")
 	names := make([]string, 0, len(devicePresets))
 	for name := range devicePresets {
