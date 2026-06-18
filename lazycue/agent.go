@@ -28,6 +28,7 @@ type AgentConfig struct {
 	Description      string
 	PreviousSteps    []byte // JSON of previous steps (fix mode)
 	PreviousError    string // Error from previous run (fix mode)
+	CacheFilePath    string // Path to the cached steps JSON for this test (fix mode); lets the agent inspect its git history for prior flakiness
 	Browser          *Browser
 	BaseURL          string
 	Model            string
@@ -176,7 +177,38 @@ CRITICAL: WHEN FIXING A FAILING TEST:
 - Only fix MECHANICAL issues: wrong selectors, missing waits, timing issues, wrong CSS selectors.
 - NEVER change what the test asserts to match broken application behavior.
 - If the application doesn't match the description, the test SHOULD fail. Report it as a genuine failure.
-- If you determine the app is genuinely broken (not matching the description), output an empty steps array and explain the failure.`
+- If you determine the app is genuinely broken (not matching the description), output an empty steps array and explain the failure.
+
+DISTINGUISHING FLAKES FROM GENUINE FAILURES:
+Many heal requests are triggered not by a broken app but by a LOAD-INDUCED FLAKE:
+under heavy CI parallelism the box is so starved that an element appears later
+than a wait_* timeout allows, even though the same steps pass quickly when the
+machine is idle. Treat an error as a likely flake when it is timeout-shaped
+(e.g. "wait_visible/wait_text timed out", an element that intermittently doesn't
+appear, an assert that fails only on a transient/empty state) AND the steps
+themselves look correct for the description.
+- A timeout-shaped error is NOT automatically a flake. The real discriminator is
+  "appears LATE" vs "never appears / appears WRONG". Before deciding it's a flake
+  you MUST confirm the app actually does the right thing now: navigate and use
+  screenshot / eval (without expect) to observe the live page, and verify the
+  awaited element/text is genuinely present and CORRECT per the description, just
+  slow. If it is absent or shows the wrong content even after waiting, that is a
+  GENUINE FAILURE (a real regression often looks timeout-shaped because the
+  element never appears) — do not paper over it by raising timeouts.
+- INVESTIGATE BEFORE EDITING. Use git_command to read the cached test's history:
+  'git log --oneline -- <cache-file>' and 'git log -p -- <cache-file>'. Repeated
+  past edits that only bumped timeouts or swapped a sleep for a wait are a strong
+  signal this test flakes under load.
+- Once you have CONFIRMED the behavior is correct-but-slow, the right fix is to
+  make the SAME steps MORE ROBUST, never to weaken assertions: raise wait_*
+  timeouts generously (e.g. 30s -> 60s), replace bare sleeps or implicit waits
+  with explicit wait_visible/wait_text on the element you are about to assert,
+  and wait for the precise post-condition (specific text/element/url) rather
+  than a coarse one. Keep every assertion in the description intact.
+- Conclude "genuine app failure" (empty steps array, with an explanation)
+  whenever the live page does not match the description — including when an
+  element never appears or shows wrong content despite waiting. When in doubt
+  between flake and regression, prefer reporting the failure over masking it.`
 }
 
 func buildGenerateUserPrompt(description string) string {
@@ -187,7 +219,18 @@ func buildGenerateUserPrompt(description string) string {
 Write the complete test as a single run_steps call. If the description mentions specific selectors or page structure you're unsure about, use screenshot or git_command to discover them first.`, description)
 }
 
-func buildFixUserPrompt(description string, previousSteps []byte, previousError string) string {
+func buildFixUserPrompt(description string, previousSteps []byte, previousError, cacheFilePath string) string {
+	historyHint := ""
+	if cacheFilePath != "" {
+		historyHint = fmt.Sprintf(`
+
+This test's cached steps live at: %s
+Before editing, check whether this test has a history of flaking under load:
+  git log --oneline -- %s
+  git log -p -- %s
+A history of timeout-only bumps is strong evidence the failure is a load flake,
+not a broken app.`, cacheFilePath, cacheFilePath, cacheFilePath)
+	}
 	return fmt.Sprintf(`A previously generated DSL test is failing. Fix it.
 
 Test description: %s
@@ -200,10 +243,21 @@ Error:
 
 INSTRUCTIONS:
 - The test DESCRIPTION is the source of truth for what the app SHOULD do.
-- Only fix MECHANICAL issues: wrong selectors, missing waits, timing problems.
+- First decide: is this a LOAD-INDUCED FLAKE or a GENUINE app failure?
+  A timeout-shaped error (wait_* timed out, an element that intermittently
+  doesn't appear) can be either: "appears late" (flake) or "never appears /
+  appears wrong" (real regression). Observe the LIVE page (navigate + screenshot
+  / eval) and confirm the awaited element/text is actually present and correct
+  per the description before calling it a flake.%s
+- For a flake: keep every assertion, and make the same steps more robust —
+  raise wait_* timeouts generously and wait explicitly on the precise element
+  you are about to assert. Do NOT weaken assertions.
+- For a mechanical bug: fix wrong selectors / missing waits only.
 - NEVER change assertions to match broken application behavior.
-- If the app doesn't match the description (e.g., wrong title, missing text), the app is broken — return an empty steps array [] and explain the failure.
-- Use screenshots to verify the current state, then decide: mechanical fix or genuine app failure.`, description, string(previousSteps), previousError)
+- If the app genuinely doesn't match the description (e.g., wrong title, missing
+  text, and robustness changes can't fix it), return an empty steps array [] and
+  explain the failure.
+- Use screenshots to verify the current state, then decide.`, description, string(previousSteps), previousError, historyHint)
 }
 
 func buildTools() []apiTool {
@@ -269,7 +323,7 @@ func RunAgent(ctx context.Context, cfg *AgentConfig) (*AgentResult, error) {
 	systemPrompt := buildSystemPrompt()
 	var userPrompt string
 	if cfg.Mode == AgentModeFix {
-		userPrompt = buildFixUserPrompt(cfg.Description, cfg.PreviousSteps, cfg.PreviousError)
+		userPrompt = buildFixUserPrompt(cfg.Description, cfg.PreviousSteps, cfg.PreviousError, cfg.CacheFilePath)
 	} else {
 		userPrompt = buildGenerateUserPrompt(cfg.Description)
 	}

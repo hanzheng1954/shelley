@@ -229,6 +229,7 @@ func Run(ctx context.Context, opts Options, description string) (*TestResult, er
 				Description:      description,
 				PreviousSteps:    cachedTest.Steps,
 				PreviousError:    failureDesc,
+				CacheFilePath:    CacheFilePath(opts.CacheDir, description),
 				Browser:          browser,
 				BaseURL:          opts.BaseURL,
 				Model:            opts.Model,
