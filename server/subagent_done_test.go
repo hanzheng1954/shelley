@@ -153,6 +153,7 @@ func TestSubagentDone(t *testing.T) {
 	t.Run("SuppressedDespiteSlugRename", testSubagentDone_SuppressedDespiteSlugRename)
 	t.Run("WaiterTimeoutAfterFinishNotifies", testSubagentDone_WaiterTimeoutAfterFinishNotifies)
 	t.Run("WaiterTimeoutBeforeFinishNotifiesOnce", testSubagentDone_WaiterTimeoutBeforeFinishNotifiesOnce)
+	t.Run("CancellationDoesNotNotifyParent", testSubagentDone_CancellationDoesNotNotifyParent)
 	t.Run("QueuedDuringDistillation", testSubagentDone_QueuedDuringDistillation)
 	t.Run("WakesIdleParentLoop", testSubagentDone_WakesIdleLoop)
 	t.Run("ToolResultCorrectness", testSubagentDone_ToolResultCorrectness)
@@ -394,6 +395,43 @@ func testSubagentDone_WaiterTimeoutBeforeFinishNotifiesOnce(t *testing.T) {
 	}
 	if n := countSyntheticDonePairs(t, f.parentMessages()); n != 1 {
 		t.Fatalf("expected exactly one synthetic done pair after late finish, got %d", n)
+	}
+}
+
+// Cancelling a subagent's in-flight turn (e.g. a resend to a busy subagent, or
+// a user-initiated stop) records a synthetic "[Operation cancelled]"
+// end-of-turn message that flips agentWorking→idle. That transition must NOT
+// fire onDone: a cancellation is not a completion, and notifying the parent
+// here produces a spurious subagent-done pair (and, when a resend's new turn
+// later finishes, a duplicate). With no waiter slot held during cancel, the
+// only thing keeping onDone quiet is the cancelling guard.
+func testSubagentDone_CancellationDoesNotNotifyParent(t *testing.T) {
+	f := newSubagentDoneFixture(t, "Should never reach the parent.")
+
+	// Bring the subagent's loop up so CancelConversation has something to tear
+	// down (it returns early when loop==nil).
+	if err := f.subagentMgr.ensureLoop(f.llmSvc, "predictable"); err != nil {
+		t.Fatalf("ensureLoop subagent: %v", err)
+	}
+	f.subagentMgr.SetAgentWorking(true)
+
+	before := len(f.parentMessages())
+	if err := f.subagentMgr.CancelConversation(context.Background()); err != nil {
+		t.Fatalf("CancelConversation: %v", err)
+	}
+
+	// Give any (erroneous) async notification a chance to land on the parent.
+	time.Sleep(200 * time.Millisecond)
+	if n := countSyntheticDonePairs(t, f.parentMessages()); n != 0 {
+		t.Fatalf("cancellation fired %d subagent-done notification(s) to the parent; want 0\nmessages:\n%s", n, dumpMessages(t, f.parentMessages()))
+	}
+	if got := len(f.parentMessages()); got != before {
+		t.Fatalf("cancellation added %d parent message(s); want 0", got-before)
+	}
+
+	// The subagent itself must be idle after cancel.
+	if f.subagentMgr.IsAgentWorking() {
+		t.Fatalf("subagent still working after CancelConversation")
 	}
 }
 

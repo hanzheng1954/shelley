@@ -524,6 +524,14 @@ func (s *PredictableService) GetLastRequest() *llm.Request {
 	return s.recentRequests[len(s.recentRequests)-1]
 }
 
+// SetResponseDelay makes every Do() call block for d before responding,
+// so tests can keep a conversation "working" for a deterministic window.
+func (s *PredictableService) SetResponseDelay(d time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.responseDelay = d
+}
+
 // ClearRequests clears the request history
 func (s *PredictableService) ClearRequests() {
 	s.mu.Lock()

@@ -46,6 +46,14 @@ type SubagentTool struct {
 
 const subagentName = "subagent"
 
+const (
+	// subagentDefaultTimeout is how long a wait=true call blocks before
+	// returning a progress summary while the subagent keeps running.
+	subagentDefaultTimeout = 15 * time.Minute
+	// subagentMaxTimeout caps an explicit timeout_seconds.
+	subagentMaxTimeout = 60 * time.Minute
+)
+
 // subagentDescription builds the tool description, including model info when models are available.
 func (s *SubagentTool) subagentDescription() string {
 	base := `Spawn or interact with a subagent conversation.
@@ -110,11 +118,11 @@ func (s *SubagentTool) subagentInputSchema() string {
     },
     "timeout_seconds": {
       "type": "integer",
-      "description": "How long to wait for a synchronous response, in seconds (default: 60, max: 300). Only applies when wait=true; ignored otherwise. If the subagent hasn't finished by this deadline, the tool returns a progress summary and the subagent keeps running in the background; its eventual completion will then be delivered asynchronously."
+      "description": "How long to wait for a synchronous response, in seconds (default: 900, max: 3600). Only applies when wait=true; ignored otherwise. If the subagent hasn't finished by this deadline, the tool returns a progress summary and the subagent keeps running in the background; its eventual completion will then be delivered asynchronously."
     },
     "wait": {
       "type": "boolean",
-      "description": "Whether to wait for completion (default: true). If false, returns immediately; when the subagent eventually finishes, its response is delivered asynchronously. If wait=true and the subagent completes before timeout, no later asynchronous duplicate is delivered."
+      "description": "Whether to wait for completion (default: true). If false, returns immediately; when the subagent eventually finishes, its response is delivered asynchronously. If wait=true and the subagent completes before timeout, no later asynchronous duplicate is delivered. Sending a new message to a subagent that is still working does NOT interrupt it: the message is queued and delivered after the current turn finishes."
     }%s
   }
 }`, modelProp)
@@ -152,13 +160,15 @@ func (s *SubagentTool) run(ctx context.Context, req subagentInput) llm.ToolOut {
 		return llm.ErrorfToolOut("prompt is required")
 	}
 
-	// Set defaults
-	timeout := 60 * time.Second
+	// Set defaults. The default wait is generous (15 min) because subagents
+	// commonly run review/analysis tasks that take several minutes; a short
+	// timeout pushed the parent to "hurry" a still-working subagent, which
+	// historically interrupted its turn. Hitting the timeout is not an error
+	// — it returns a progress summary and the subagent keeps running, with its
+	// eventual result delivered asynchronously.
+	timeout := subagentDefaultTimeout
 	if req.TimeoutSeconds > 0 {
-		if req.TimeoutSeconds > 300 {
-			req.TimeoutSeconds = 300
-		}
-		timeout = time.Duration(req.TimeoutSeconds) * time.Second
+		timeout = min(time.Duration(req.TimeoutSeconds)*time.Second, subagentMaxTimeout)
 	}
 
 	wait := true

@@ -153,6 +153,15 @@ type ConversationManager struct {
 	// (the timeout path), it consults this flag to know an async completion
 	// notification is still owed. Guarded by cm.mu.
 	subagentFinishSuppressed bool
+
+	// cancelling is true while CancelConversation is tearing down the current
+	// turn. The cancel path records a synthetic "[Operation cancelled]"
+	// end-of-turn message, which flips agentWorking→idle and would otherwise
+	// fire onDone — delivering a spurious subagent-completion notification to
+	// the parent for a turn the user (or a resend) cut short. A cancellation
+	// is not a completion, so we suppress onDone for its working→idle
+	// transition. Guarded by cm.mu.
+	cancelling bool
 }
 
 // NewConversationManager constructs a manager with dependencies but defers hydration until needed.
@@ -263,8 +272,11 @@ func (cm *ConversationManager) setAgentWorking(working, persist bool) {
 	// tried to paper over. We also remember that we suppressed a real finish,
 	// so a waiter that gives up (times out) without delivering can recover the
 	// notification rather than drop it.
-	suppressDone := cm.subagentWaitOwners > 0
-	if !working && suppressDone {
+	// A cancellation's working→idle transition is not a completion: suppress
+	// onDone for it too, and do NOT record it as a suppressed finish (no
+	// waiter is owed a deferred notification for a turn that was cut short).
+	suppressDone := cm.subagentWaitOwners > 0 || cm.cancelling
+	if !working && cm.subagentWaitOwners > 0 {
 		cm.subagentFinishSuppressed = true
 	}
 	cm.mu.Unlock()
@@ -296,6 +308,19 @@ func (cm *ConversationManager) setAgentWorking(working, persist bool) {
 func (cm *ConversationManager) registerSubagentWaiter() {
 	cm.mu.Lock()
 	cm.subagentWaitOwners++
+	cm.mu.Unlock()
+}
+
+// consumeSuppressedFinish clears any pending suppressed-finish flag without
+// owing an async notification. The wait=true path uses it after an in-flight
+// turn finishes while we wait to send a follow-up: that earlier turn's
+// completion is exactly what we waited for and is superseded by the follow-up
+// we are about to send, so it must NOT later be mistaken for an undelivered
+// finish of the follow-up turn (which would fire a premature/duplicate
+// notification if our own wait subsequently timed out).
+func (cm *ConversationManager) consumeSuppressedFinish() {
+	cm.mu.Lock()
+	cm.subagentFinishSuppressed = false
 	cm.mu.Unlock()
 }
 
@@ -1449,6 +1474,19 @@ func (cm *ConversationManager) CancelConversation(ctx context.Context) error {
 		cm.logger.Info("No active loop to cancel")
 		return nil
 	}
+
+	// Mark the manager as cancelling so the synthetic "[Operation cancelled]"
+	// end-of-turn message recorded below does not fire onDone — a cancellation
+	// is not a subagent completion and must not notify the parent. Cleared
+	// once teardown finishes.
+	cm.mu.Lock()
+	cm.cancelling = true
+	cm.mu.Unlock()
+	defer func() {
+		cm.mu.Lock()
+		cm.cancelling = false
+		cm.mu.Unlock()
+	}()
 
 	cm.logger.Info("Cancelling conversation")
 

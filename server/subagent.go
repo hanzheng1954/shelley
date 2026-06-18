@@ -102,53 +102,109 @@ func (r *SubagentRunner) RunSubagent(ctx context.Context, conversationID, prompt
 		return "", fmt.Errorf("failed to get LLM service: %w", err)
 	}
 
-	// If the subagent is currently working, stop it first before sending new message.
-	if manager.IsAgentWorking() {
-		s.logger.Info("Subagent is working, stopping before sending new message", "conversationID", conversationID)
-		if err := manager.CancelConversation(ctx); err != nil {
-			s.logger.Error("Failed to cancel subagent conversation", "error", err)
-			// Continue anyway - we still want to send the new message
-		}
-		// Re-hydrate the manager after cancellation
-		if err := manager.Hydrate(ctx); err != nil {
-			return "", fmt.Errorf("failed to hydrate after cancellation: %w", err)
-		}
-	}
-
 	// Create user message
 	userMessage := llm.Message{
 		Role:    llm.MessageRoleUser,
 		Content: []llm.Content{{Type: llm.ContentTypeText, Text: prompt}},
 	}
 
-	// For wait=true, register a synchronous-waiter slot on the subagent
-	// manager BEFORE accepting the message. The slot is what suppresses the
-	// subagent's async onDone notification: while it is held, this tool call
-	// is responsible for delivering the response. Registering before
-	// AcceptUserMessage (which may complete the turn synchronously) ensures
-	// the working→idle transition is covered even for instant replies.
-	if wait {
-		manager.registerSubagentWaiter()
+	deadline := time.Now().Add(timeout)
+
+	// Sending to a busy subagent must NOT interrupt its current turn. We used
+	// to CancelConversation here, which discarded the subagent's in-flight
+	// work AND mis-reported the cancellation to the parent as a completion.
+	// Now we leave the current turn running:
+	//
+	//   - wait=false: queue the message (delivered after the current turn via
+	//     the normal pending-batch drain) and return immediately.
+	//   - wait=true: register the synchronous-waiter slot first (so the
+	//     current turn's completion does not fire a spurious async
+	//     notification while we are blocked), then wait for the current turn
+	//     to finish before sending our follow-up.
+	if !wait {
+		if manager.IsAgentWorking() {
+			if err := manager.QueueMessage(ctx, s, modelID, userMessage); err != nil {
+				return "", fmt.Errorf("failed to queue message for busy subagent: %w", err)
+			}
+			return fmt.Sprintf("Subagent is busy; message queued and will be processed after its current turn. Conversation ID: %s", conversationID), nil
+		}
+		if _, err := manager.AcceptUserMessage(ctx, llmService, modelID, userMessage); err != nil {
+			return "", fmt.Errorf("failed to accept user message: %w", err)
+		}
+		return fmt.Sprintf("Subagent started processing. Conversation ID: %s", conversationID), nil
 	}
 
-	// Accept the user message (this starts processing)
-	_, err = manager.AcceptUserMessage(ctx, llmService, modelID, userMessage)
-	if err != nil {
-		if wait {
-			// Release the slot like any other non-delivery exit; endWait also
-			// fires the async completion if a finish was suppressed while we
-			// held it (symmetry with the timeout/cancel paths).
+	// wait=true. Register a synchronous-waiter slot on the subagent manager
+	// BEFORE doing anything that could trigger a working→idle transition. The
+	// slot suppresses the subagent's async onDone notification: while it is
+	// held, this tool call is responsible for delivering the response. It
+	// covers both the current in-flight turn (if any) finishing while we wait
+	// and our own follow-up turn completing.
+	manager.registerSubagentWaiter()
+
+	// Let any in-flight turn finish on its own before we send (no cancel).
+	if manager.IsAgentWorking() {
+		s.logger.Info("Subagent is working; waiting for its current turn to finish before sending", "conversationID", conversationID)
+		done, err := r.waitForIdle(ctx, manager, conversationID, deadline)
+		if err != nil {
 			r.endWait(manager, conversationID, false)
+			return "", err
 		}
-		return "", fmt.Errorf("failed to accept user message: %w", err)
+		if !done {
+			// Deadline hit while the current turn was still running. Return a
+			// progress summary; the subagent keeps working and its eventual
+			// completion is delivered asynchronously (endWait handles a finish
+			// that was suppressed while we held the slot).
+			r.endWait(manager, conversationID, false)
+			return r.generateProgressSummary(ctx, conversationID, modelID, llmService)
+		}
+		// The in-flight turn finished while we held the slot, so its onDone was
+		// suppressed and recorded as a pending suppressed-finish. That is the
+		// turn we deliberately waited out; our follow-up supersedes it. Clear
+		// the flag so a later timeout on OUR turn (in waitForResponse) doesn't
+		// misattribute that stale finish to the follow-up and fire a premature
+		// duplicate notification.
+		manager.consumeSuppressedFinish()
 	}
-	if !wait {
-		return fmt.Sprintf("Subagent started processing. Conversation ID: %s", conversationID), nil
+
+	// Accept the follow-up message (this starts a fresh turn).
+	if _, err = manager.AcceptUserMessage(ctx, llmService, modelID, userMessage); err != nil {
+		// Release the slot like any other non-delivery exit; endWait also
+		// fires the async completion if a finish was suppressed while we
+		// held it (symmetry with the timeout/cancel paths).
+		r.endWait(manager, conversationID, false)
+		return "", fmt.Errorf("failed to accept user message: %w", err)
 	}
 
 	// Wait for the agent to finish (or timeout). waitForResponse owns the
 	// synchronous-waiter slot registered above and releases it on every exit.
-	return r.waitForResponse(ctx, manager, conversationID, modelID, llmService, timeout)
+	return r.waitForResponse(ctx, manager, conversationID, modelID, llmService, deadline)
+}
+
+// waitForIdle blocks until the subagent's current turn finishes (returns
+// done=true), the deadline passes (done=false), or ctx is cancelled (err).
+// It does not send anything; it only waits for an in-flight turn to end so a
+// follow-up can be sent without interrupting work.
+func (r *SubagentRunner) waitForIdle(ctx context.Context, manager *ConversationManager, conversationID string, deadline time.Time) (done bool, err error) {
+	pollInterval := 500 * time.Millisecond
+	for {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+		if !manager.IsAgentWorking() {
+			return true, nil
+		}
+		if time.Now().After(deadline) {
+			return false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case <-time.After(pollInterval):
+		}
+	}
 }
 
 // endWait releases this call's synchronous-waiter slot and, if a working→idle
@@ -163,10 +219,9 @@ func (r *SubagentRunner) endWait(manager *ConversationManager, conversationID st
 	}
 }
 
-func (r *SubagentRunner) waitForResponse(ctx context.Context, manager *ConversationManager, conversationID, modelID string, llmService llm.Service, timeout time.Duration) (string, error) {
+func (r *SubagentRunner) waitForResponse(ctx context.Context, manager *ConversationManager, conversationID, modelID string, llmService llm.Service, deadline time.Time) (string, error) {
 	s := r.server
 
-	deadline := time.Now().Add(timeout)
 	pollInterval := 500 * time.Millisecond
 
 	for {
