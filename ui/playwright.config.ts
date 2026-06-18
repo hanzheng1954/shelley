@@ -19,6 +19,14 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 1 : 0,
+  /* Per-test timeout. Playwright's 30s default is too tight for our flows:
+   * several specs drive multiple agent round-trips, each guarded by its own
+   * 30s expect() wait, so the whole test legitimately needs more than 30s
+   * under CI load. When the test timeout fired mid-assertion Playwright tore
+   * down the page, surfacing as "Target page, context or browser has been
+   * closed" rather than a clear timeout. 120s gives ample headroom over the
+   * realistic few-seconds runtime while still bounding a genuinely hung test. */
+  timeout: 120_000,
   /* Use 2 workers in CI. All tests share a single predictable-mode server
    * backed by a single-writer SQLite DB; 3 workers caused systemic flake
    * from SSE/agent-working contention on ubuntu-latest. 2 keeps wall-clock
