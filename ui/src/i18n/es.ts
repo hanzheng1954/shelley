@@ -146,8 +146,8 @@ export const es: TranslationKeys = {
   maxContextTokens: "Tokens de contexto máximos",
   imageSupport: "Image input support",
   imageSupportHelp:
-    "Auto consults models.dev/api.json. Choose Supported or Not supported to override.",
-  imageSupportAuto: "Auto (from models.dev)",
+    "Auto detecta esto automáticamente. Elige Compatible o No compatible para definirlo tú.",
+  imageSupportAuto: "Auto",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "Etiquetas",
@@ -158,6 +158,7 @@ export const es: TranslationKeys = {
   columnActions: "Acciones",
   columnImages: "Imágenes",
   imageSupportAutoShort: "auto",
+  imageSupportAutoResolved: "se resuelve a:",
   tagsPlaceholder: "separadas por comas, ej., slug, cheap",
   tagsTooltip:
     'Etiquetas separadas por comas para este modelo. Use "slug" para marcar este modelo para generar títulos de conversación. Si ningún modelo tiene la etiqueta "slug", se usará el modelo de la conversación.',

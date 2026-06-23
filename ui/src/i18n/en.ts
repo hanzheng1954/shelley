@@ -145,8 +145,8 @@ export const en: TranslationKeys = {
   maxContextTokens: "Max Context Tokens",
   imageSupport: "Image input support",
   imageSupportHelp:
-    "Auto consults models.dev/api.json for the model's modalities. Choose Supported or Not supported to override (e.g., for models not in models.dev). When images are not supported, the read_image tool is hidden from this model.",
-  imageSupportAuto: "Auto (from models.dev)",
+    "Auto detects this automatically. Pick Supported or Not supported to set it yourself.",
+  imageSupportAuto: "Auto",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "Tags",
@@ -157,6 +157,7 @@ export const en: TranslationKeys = {
   columnActions: "Actions",
   columnImages: "Images",
   imageSupportAutoShort: "auto",
+  imageSupportAutoResolved: "resolves to:",
   tagsPlaceholder: "comma-separated, e.g., slug, cheap",
   tagsTooltip:
     'Comma-separated tags for this model. Use "slug" to mark this model for generating conversation titles. If no model has the "slug" tag, the conversation\'s model will be used.',

@@ -144,9 +144,8 @@ export const ja: TranslationKeys = {
   enterApiKey: "APIキーを入力",
   maxContextTokens: "最大コンテキストトークン数",
   imageSupport: "Image input support",
-  imageSupportHelp:
-    "Auto consults models.dev/api.json. Choose Supported or Not supported to override.",
-  imageSupportAuto: "Auto (from models.dev)",
+  imageSupportHelp: "自動で検出します。手動で設定するには「対応」または「非対応」を選びます。",
+  imageSupportAuto: "自動",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "タグ",
@@ -157,6 +156,7 @@ export const ja: TranslationKeys = {
   columnActions: "操作",
   columnImages: "画像",
   imageSupportAutoShort: "自動",
+  imageSupportAutoResolved: "の判定結果:",
   tagsPlaceholder: "カンマ区切り、例: slug, cheap",
   tagsTooltip:
     'このモデル用のカンマ区切りのタグ。会話タイトル生成用のモデルとしてマークするには"slug"を使用します。"slug"タグを持つモデルがない場合は、会話のモデルが使用されます。',

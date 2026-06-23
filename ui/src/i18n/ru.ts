@@ -145,8 +145,8 @@ export const ru: TranslationKeys = {
   maxContextTokens: "Макс. токенов контекста",
   imageSupport: "Image input support",
   imageSupportHelp:
-    "Auto consults models.dev/api.json. Choose Supported or Not supported to override.",
-  imageSupportAuto: "Auto (from models.dev)",
+    "Auto определяет это автоматически. Выберите «Поддерживается» или «Не поддерживается», чтобы задать вручную.",
+  imageSupportAuto: "Авто",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "Теги",
@@ -157,6 +157,7 @@ export const ru: TranslationKeys = {
   columnActions: "Действия",
   columnImages: "Изображения",
   imageSupportAutoShort: "авто",
+  imageSupportAutoResolved: "разрешается в:",
   tagsPlaceholder: "через запятую, напр., slug, cheap",
   tagsTooltip:
     'Теги через запятую для этой модели. Используйте "slug", чтобы отметить модель для генерации заголовков диалогов. Если ни одна модель не имеет тега "slug", будет использована модель диалога.',

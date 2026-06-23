@@ -9,6 +9,7 @@ package modelsdev
 import (
 	_ "embed"
 	"encoding/json"
+	"net/url"
 	"strings"
 	"sync"
 )
@@ -24,12 +25,20 @@ type modelEntry struct {
 }
 
 type providerEntry struct {
+	// API is the provider's base URL (the "api" field in models.dev), e.g.
+	// "https://opencode.ai/zen/v1". Used to match custom models by their
+	// configured endpoint instead of by Shelley's internal provider name.
+	API    string                `json:"api"`
 	Models map[string]modelEntry `json:"models"`
 }
 
 var (
 	parseOnce sync.Once
 	parsed    map[string]providerEntry
+	// hostIndex maps a normalized host (e.g. "opencode.ai") to the provider
+	// entries whose "api" URL lives on that host. A host may serve more than
+	// one provider (e.g. opencode / opencode-go), so this is a slice.
+	hostIndex map[string][]providerEntry
 )
 
 func load() map[string]providerEntry {
@@ -39,42 +48,81 @@ func load() map[string]providerEntry {
 			// is a programmer error.
 			panic("modelsdev: failed to parse embedded api.json: " + err.Error())
 		}
+		hostIndex = make(map[string][]providerEntry)
+		for _, p := range parsed {
+			if h := hostOf(p.API); h != "" {
+				hostIndex[h] = append(hostIndex[h], p)
+			}
+		}
+		// models.dev omits the "api" field for the major first-party
+		// providers (their base URL is implicit in the official SDKs), so they
+		// never make it into hostIndex above. Wire up their well-known hosts
+		// explicitly so custom models pointed at the official endpoints still
+		// resolve.
+		for host, key := range knownHosts {
+			if p, ok := parsed[key]; ok {
+				hostIndex[host] = append(hostIndex[host], p)
+			}
+		}
 	})
 	return parsed
 }
 
-// providerMap translates Shelley's internal provider names to the provider
-// keys used by models.dev's api.json.
-var providerMap = map[string]string{
-	"anthropic":        "anthropic",
-	"openai":           "openai",
-	"openai-responses": "openai",
-	"gemini":           "google",
-	"fireworks":        "fireworks-ai",
+// knownHosts maps the well-known first-party API hosts to their models.dev
+// provider keys. models.dev does not record an "api" URL for these, so they
+// are seeded into the host index manually.
+var knownHosts = map[string]string{
+	"api.anthropic.com":                 "anthropic",
+	"api.openai.com":                    "openai",
+	"generativelanguage.googleapis.com": "google",
 }
 
-// LookupImageSupport reports whether models.dev says (provider, modelName)
+// hostOf extracts a normalized host from a URL or bare host string. It strips
+// a leading "www." and lowercases the result. Returns "" if no host is found.
+func hostOf(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	// url.Parse needs a scheme to populate Host; add one if missing.
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	h := strings.ToLower(u.Hostname())
+	return strings.TrimPrefix(h, "www.")
+}
+
+// LookupImageSupport reports whether models.dev says (endpoint, modelName)
 // accepts image inputs. The second return value is false if we have no
 // information about this model.
 //
-// provider is Shelley's internal provider name ("anthropic", "openai",
-// "openai-responses", "gemini", "fireworks"). modelName is the value sent
+// endpoint is the base URL the model is configured to talk to (e.g.
+// "https://opencode.ai/zen/v1"); it may be empty. modelName is the value sent
 // to the underlying provider.
 //
+// Models are matched to a models.dev provider by the HOST of their endpoint,
+// matched softly on the path. Callers don't always configure the exact path
+// models.dev records, so the host must agree and the path is used only to
+// disambiguate when a single host serves more than one provider (e.g.
+// opencode at /zen/v1 vs opencode-go at /zen/go/v1): the provider whose "api"
+// path shares the longest leading run of path segments with the endpoint
+// wins. First-party hosts that models.dev omits an "api" field for are seeded
+// from knownHosts. The model id is then resolved within the chosen
+// provider's catalog (exact, case-insensitive, or last "/" segment).
+//
 // Lookup strategy, in order:
-//  1. exact + case-insensitive match in the resolved provider entry
-//  2. last-segment (after the final '/') match in the resolved provider —
-//     handles OpenRouter-style "vendor/model" slugs pointed at a
-//     provider-native endpoint
-//  3. exact + last-segment match under the "openrouter" provider — handles
-//     OpenRouter-routed custom models that keep the full slug
-func LookupImageSupport(provider, modelName string) (supported, found bool) {
+//  1. the best-path-matching provider whose host matches the endpoint host
+//  2. the "openrouter" catalog (full "vendor/model" slugs), as a last resort
+func LookupImageSupport(endpoint, modelName string) (supported, found bool) {
 	data := load()
-	if key, ok := providerMap[provider]; ok {
-		if p, ok := data[key]; ok {
-			if m, ok := lookupInProvider(p, modelName); ok {
-				return entryHasImage(m), true
-			}
+	if host := hostOf(endpoint); host != "" {
+		if p, ok := bestProviderForPath(hostIndex[host], pathSegments(endpoint), modelName); ok {
+			m, _ := lookupInProvider(p, modelName)
+			return entryHasImage(m), true
 		}
 	}
 	// Last-resort: OpenRouter keeps a full slug catalog.
@@ -84,6 +132,63 @@ func LookupImageSupport(provider, modelName string) (supported, found bool) {
 		}
 	}
 	return false, false
+}
+
+// bestProviderForPath picks, among providers that carry modelName, the one
+// whose "api" path best matches endpointSegs (longest shared leading run of
+// path segments). Only providers that actually contain the model are
+// considered, so a better-path provider that lacks the model never shadows a
+// worse-path provider that has it. Returns ok=false if no provider carries
+// the model.
+func bestProviderForPath(providers []providerEntry, endpointSegs []string, modelName string) (providerEntry, bool) {
+	var best providerEntry
+	bestScore := -1
+	found := false
+	for _, p := range providers {
+		if _, hit := lookupInProvider(p, modelName); !hit {
+			continue
+		}
+		score := commonPrefixLen(pathSegments(p.API), endpointSegs)
+		if score > bestScore {
+			best, bestScore, found = p, score, true
+		}
+	}
+	return best, found
+}
+
+// pathSegments splits a URL's path into non-empty, lowercased segments.
+func pathSegments(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	var segs []string
+	for _, s := range strings.Split(u.Path, "/") {
+		if s != "" {
+			segs = append(segs, strings.ToLower(s))
+		}
+	}
+	return segs
+}
+
+// commonPrefixLen returns the number of equal leading elements of a and b.
+func commonPrefixLen(a, b []string) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	i := 0
+	for i < n && a[i] == b[i] {
+		i++
+	}
+	return i
 }
 
 // lookupInProvider tries exact, case-insensitive, and last-segment matches

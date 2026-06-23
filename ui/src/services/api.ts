@@ -707,6 +707,7 @@ export interface CustomModel {
   tags: string; // Comma-separated tags (e.g., "slug" for slug generation)
   reasoning_effort: string; // Free-form reasoning.effort for OpenAI Responses API
   image_support: "auto" | "yes" | "no";
+  supports_images: boolean; // Resolved boolean that image_support evaluates to
 }
 
 export interface CreateCustomModelRequest {

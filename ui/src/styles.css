@@ -6856,11 +6856,15 @@ svg {
   color: var(--red-text, #b91c1c);
 }
 
-.models-table-image-auto {
-  font-size: 0.7rem;
+/* Small "auto" tag shown next to the resolved ✓/✕ for custom models whose
+   image support is set to Auto. */
+.models-table-image-auto-tag {
+  margin-left: 0.25rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
+  vertical-align: middle;
 }
 
 .model-card {
@@ -7375,6 +7379,13 @@ svg {
   color: var(--text-secondary);
   font-size: 0.75rem;
   line-height: 1.3;
+}
+
+.form-hint code {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  word-break: break-all;
+  color: var(--text-primary);
 }
 
 .test-result {

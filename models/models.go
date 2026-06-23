@@ -657,7 +657,7 @@ func (m *Manager) GetModelInfo(modelID string) *ModelInfo {
 
 // createServiceFromModel creates an LLM service from a database model configuration.
 func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
-	supportsImages := resolveSupportsImages(model.ProviderType, model.ModelName, model.ImageSupport)
+	supportsImages := ResolveSupportsImages(model.Endpoint, model.ModelName, model.ImageSupport)
 	switch model.ProviderType {
 	case "anthropic":
 		return &ant.Service{
@@ -711,17 +711,17 @@ func (m *Manager) createServiceFromModel(model *generated.Model) llm.Service {
 	}
 }
 
-// resolveSupportsImages turns a stored image_support value ("auto"|"yes"|"no")
-// into a SupportsImages bool. "auto" defers to models.dev; unknown models
-// default to allowing images.
-func resolveSupportsImages(provider, modelName, imageSupport string) bool {
+// ResolveSupportsImages turns a stored image_support value ("auto"|"yes"|"no")
+// into a SupportsImages bool. "auto" is resolved from the model's endpoint URL
+// and name; unknown models default to allowing images.
+func ResolveSupportsImages(endpoint, modelName, imageSupport string) bool {
 	switch imageSupport {
 	case "yes":
 		return true
 	case "no":
 		return false
 	case "auto", "":
-		supported, found := modelsdev.LookupImageSupport(provider, modelName)
+		supported, found := modelsdev.LookupImageSupport(endpoint, modelName)
 		if !found {
 			return true
 		}

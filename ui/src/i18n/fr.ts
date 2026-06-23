@@ -147,8 +147,8 @@ export const fr: TranslationKeys = {
   maxContextTokens: "Nombre maximum de tokens de contexte",
   imageSupport: "Image input support",
   imageSupportHelp:
-    "Auto consults models.dev/api.json. Choose Supported or Not supported to override.",
-  imageSupportAuto: "Auto (from models.dev)",
+    "Auto le détecte automatiquement. Choisissez Pris en charge ou Non pris en charge pour le définir.",
+  imageSupportAuto: "Auto",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "Étiquettes",
@@ -159,6 +159,7 @@ export const fr: TranslationKeys = {
   columnActions: "Actions",
   columnImages: "Images",
   imageSupportAutoShort: "auto",
+  imageSupportAutoResolved: "se résout en :",
   tagsPlaceholder: "séparées par des virgules, ex : slug, cheap",
   tagsTooltip:
     "Étiquettes séparées par des virgules pour ce modèle. Utilisez « slug » pour marquer ce modèle pour la génération de titres de conversation. Si aucun modèle n'a l'étiquette « slug », le modèle de la conversation sera utilisé.",

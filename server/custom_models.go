@@ -13,6 +13,7 @@ import (
 	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/gem"
 	"shelley.exe.dev/llm/oai"
+	"shelley.exe.dev/models"
 )
 
 // ModelAPI is the API representation of a model
@@ -26,9 +27,12 @@ type ModelAPI struct {
 	MaxTokens       int64  `json:"max_tokens"`
 	Tags            string `json:"tags"`             // Comma-separated tags (e.g., "slug" for slug generation)
 	ReasoningEffort string `json:"reasoning_effort"` // Free-form reasoning.effort for OpenAI Responses API; empty = default
-	// ImageSupport is one of "auto", "yes", or "no". "auto" defers to
-	// models.dev/api.json (see shelley/models/modelsdev).
+	// ImageSupport is one of "auto", "yes", or "no". "auto" is resolved
+	// automatically from the model's endpoint and name.
 	ImageSupport string `json:"image_support"`
+	// SupportsImages is the resolved boolean that "image_support" evaluates
+	// to for this model. It lets the UI show what "auto" resolves to.
+	SupportsImages bool `json:"supports_images"`
 }
 
 // CreateModelRequest is the request body for creating a model.
@@ -91,6 +95,7 @@ func toModelAPI(m generated.Model) ModelAPI {
 		Tags:            m.Tags,
 		ReasoningEffort: m.ReasoningEffort,
 		ImageSupport:    m.ImageSupport,
+		SupportsImages:  models.ResolveSupportsImages(m.Endpoint, m.ModelName, m.ImageSupport),
 	}
 }
 

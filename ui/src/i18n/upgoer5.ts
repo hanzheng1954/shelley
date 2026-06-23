@@ -144,9 +144,8 @@ export const upgoer5: TranslationKeys = {
   enterApiKey: "Put in your key",
   maxContextTokens: "Most words it can hold in its head",
   imageSupport: "Image input support",
-  imageSupportHelp:
-    "Auto consults models.dev/api.json. Choose Supported or Not supported to override.",
-  imageSupportAuto: "Auto (from models.dev)",
+  imageSupportHelp: "We can guess this for you. Pick yes or no to set it your own self.",
+  imageSupportAuto: "Auto",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "Marks",
@@ -157,6 +156,7 @@ export const upgoer5: TranslationKeys = {
   columnActions: "Do",
   columnImages: "Pictures",
   imageSupportAutoShort: "maybe",
+  imageSupportAutoResolved: "turns into:",
   tagsPlaceholder: "put a small low mark between each one, like: fast, big",
   tagsTooltip:
     "Marks for this brain, each one after the other with a small low mark between. You can use a mark to make this brain be the one that writes short names for your talks. If you do not put that mark on any brain, the brain you are using right now will make the name all on its own.",

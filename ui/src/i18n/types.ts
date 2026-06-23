@@ -158,6 +158,7 @@ export interface TranslationKeys {
   columnActions: string;
   columnImages: string;
   imageSupportAutoShort: string;
+  imageSupportAutoResolved: string;
   reasoningEffort: string;
   reasoningEffortPlaceholder: string;
   reasoningEffortHint: string;

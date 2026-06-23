@@ -150,6 +150,11 @@
             <option value="no">{{ t("imageSupportNo") }}</option>
           </select>
           <div class="form-hint">{{ t("imageSupportHelp") }}</div>
+          <div v-if="editingResolvedAuto" class="form-hint">
+            <code>auto({{ editingResolvedAuto.endpoint }}, {{ editingResolvedAuto.model }})</code>
+            {{ t("imageSupportAutoResolved") }}
+            {{ editingResolvedAuto.supported ? t("imageSupportYes") : t("imageSupportNo") }}
+          </div>
         </div>
 
         <!-- Reasoning Effort (OpenAI Responses API only) -->
@@ -317,28 +322,20 @@
               </td>
               <td class="models-table-images">
                 <span
-                  v-if="(model.image_support ?? 'auto') === 'yes'"
-                  class="models-table-image-yes"
+                  :class="
+                    customModelSupportsImages(model)
+                      ? 'models-table-image-yes'
+                      : 'models-table-image-no'
+                  "
                   role="img"
-                  :title="t('imageSupportYes')"
-                  :aria-label="t('imageSupportYes')"
-                  >✓</span
-                >
-                <span
-                  v-else-if="(model.image_support ?? 'auto') === 'no'"
-                  class="models-table-image-no"
-                  role="img"
-                  :title="t('imageSupportNo')"
-                  :aria-label="t('imageSupportNo')"
-                  >✕</span
-                >
-                <span
-                  v-else
-                  class="models-table-image-auto"
-                  role="img"
-                  :title="t('imageSupportAuto')"
-                  :aria-label="t('imageSupportAuto')"
-                  >{{ t("imageSupportAutoShort") }}</span
+                  :title="customModelImageTitle(model)"
+                  :aria-label="customModelImageTitle(model)"
+                  >{{ customModelSupportsImages(model) ? "✓" : "✕"
+                  }}<span
+                    v-if="(model.image_support ?? 'auto') === 'auto'"
+                    class="models-table-image-auto-tag"
+                    >{{ t("imageSupportAutoShort") }}</span
+                  ></span
                 >
               </td>
               <td class="models-table-actions">
@@ -497,6 +494,38 @@ const showTagsTooltip = ref(false);
 const builtInModelsFiltered = computed(() =>
   builtInModels.value.filter((m) => m.id !== "predictable"),
 );
+
+// For a custom model, the boolean its image_support setting evaluates to. When
+// set to "auto" we use the server-resolved supports_images; explicit yes/no win.
+function customModelSupportsImages(model: CustomModel): boolean {
+  const setting = model.image_support ?? "auto";
+  if (setting === "yes") return true;
+  if (setting === "no") return false;
+  return model.supports_images ?? true;
+}
+
+function customModelImageTitle(model: CustomModel): string {
+  const label = customModelSupportsImages(model) ? t("imageSupportYes") : t("imageSupportNo");
+  // Surface what auto resolved to for auto models.
+  if ((model.image_support ?? "auto") === "auto") {
+    return `${t("imageSupportAuto")} \u2014 ${label}`;
+  }
+  return label;
+}
+
+// When editing an existing custom model whose image support is Auto, expose the
+// inputs (endpoint + model) and the resolved boolean so the form can show
+// 'auto(url, model) resolves to: ...'.
+const editingResolvedAuto = computed(() => {
+  if (form.image_support !== "auto" || !editingModelId.value) return null;
+  const editing = models.value.find((m) => m.model_id === editingModelId.value);
+  if (!editing) return null;
+  return {
+    endpoint: editing.endpoint || "\u2014",
+    model: editing.model_name || "\u2014",
+    supported: editing.supports_images ?? true,
+  };
+});
 
 function resetForm() {
   Object.assign(form, emptyForm);

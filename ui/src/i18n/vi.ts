@@ -144,9 +144,8 @@ export const vi: TranslationKeys = {
   enterApiKey: "Nhập API key",
   maxContextTokens: "Cửa sổ ngữ cảnh tối đa",
   imageSupport: "Image input support",
-  imageSupportHelp:
-    "Auto consults models.dev/api.json. Choose Supported or Not supported to override.",
-  imageSupportAuto: "Auto (from models.dev)",
+  imageSupportHelp: "Auto tự phát hiện. Chọn Được hỗ trợ hoặc Không hỗ trợ để tự đặt.",
+  imageSupportAuto: "Tự động",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "Tags",
@@ -157,6 +156,7 @@ export const vi: TranslationKeys = {
   columnActions: "Hành động",
   columnImages: "Hình ảnh",
   imageSupportAutoShort: "tự động",
+  imageSupportAutoResolved: "phân giải thành:",
   tagsPlaceholder: "phân cách bằng dấu phẩy, ví dụ slug, rẻ",
   tagsTooltip:
     'Sử dụng tag phân cách bằng dấu phẩy cho model. Dùng "slug" để đánh dấu model này làm model tạo tiêu đề hội thoại. Nếu không có model nào có tag "slug", model của hội thoại sẽ được sử dụng.',

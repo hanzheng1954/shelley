@@ -144,9 +144,8 @@ export const zhTW: TranslationKeys = {
   enterApiKey: "輸入 API 金鑰",
   maxContextTokens: "最大上下文權杖數",
   imageSupport: "Image input support",
-  imageSupportHelp:
-    "Auto consults models.dev/api.json. Choose Supported or Not supported to override.",
-  imageSupportAuto: "Auto (from models.dev)",
+  imageSupportHelp: "自動偵測。選擇「支援」或「不支援」可手動設定。",
+  imageSupportAuto: "自動",
   imageSupportYes: "Supported",
   imageSupportNo: "Not supported",
   tags: "標籤",
@@ -157,6 +156,7 @@ export const zhTW: TranslationKeys = {
   columnActions: "操作",
   columnImages: "圖片",
   imageSupportAutoShort: "自動",
+  imageSupportAutoResolved: "解析為：",
   tagsPlaceholder: "逗號分隔，例如：slug, cheap",
   tagsTooltip:
     '此模型的逗號分隔標籤。使用 "slug" 標記此模型用於產生對話標題。若沒有模型帶有 "slug" 標籤，將使用對話目前的模型。',

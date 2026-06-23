@@ -100,49 +100,32 @@ const emptyForm: FormData = {
 const REASONING_EFFORT_SUGGESTIONS = ["none", "minimal", "low", "medium", "high", "xhigh"];
 
 type ImageSupportIndicatorProps =
+  // Built-in models: the resolved boolean is all we have.
   | { mode: "resolved"; resolved: boolean }
-  | { mode: "custom"; imageSupport: "auto" | "yes" | "no" };
+  // Custom models: the user's setting plus the boolean it resolves to.
+  | { mode: "custom"; imageSupport: "auto" | "yes" | "no"; resolved: boolean };
 
 function ImageSupportIndicator(props: ImageSupportIndicatorProps) {
   const { t } = useI18n();
-  let kind: "yes" | "no" | "auto";
-  if (props.mode === "resolved") {
-    kind = props.resolved ? "yes" : "no";
-  } else {
-    kind = props.imageSupport;
-  }
-  if (kind === "yes") {
-    return (
-      <span
-        className="models-table-image-yes"
-        role="img"
-        title={t("imageSupportYes")}
-        aria-label={t("imageSupportYes")}
-      >
-        ✓
-      </span>
-    );
-  }
-  if (kind === "no") {
-    return (
-      <span
-        className="models-table-image-no"
-        role="img"
-        title={t("imageSupportNo")}
-        aria-label={t("imageSupportNo")}
-      >
-        ✕
-      </span>
-    );
-  }
+  const supported =
+    props.mode === "resolved"
+      ? props.resolved
+      : props.imageSupport === "no"
+        ? false
+        : props.resolved;
+  // For custom models set to "auto", surface what auto resolved to.
+  const isAuto = props.mode === "custom" && props.imageSupport === "auto";
+  const label = supported ? t("imageSupportYes") : t("imageSupportNo");
+  const title = isAuto ? `${t("imageSupportAuto")} — ${label}` : label;
   return (
     <span
-      className="models-table-image-auto"
+      className={supported ? "models-table-image-yes" : "models-table-image-no"}
       role="img"
-      title={t("imageSupportAuto")}
-      aria-label={t("imageSupportAuto")}
+      title={title}
+      aria-label={title}
     >
-      {t("imageSupportAutoShort")}
+      {supported ? "✓" : "✕"}
+      {isAuto && <span className="models-table-image-auto-tag">{t("imageSupportAutoShort")}</span>}
     </span>
   );
 }
@@ -540,6 +523,21 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 <option value="no">{t("imageSupportNo")}</option>
               </select>
               <div className="form-hint">{t("imageSupportHelp")}</div>
+              {form.image_support === "auto" &&
+                editingModelId &&
+                (() => {
+                  const editing = models.find((m) => m.model_id === editingModelId);
+                  if (!editing) return null;
+                  return (
+                    <div className="form-hint">
+                      <code>
+                        auto({editing.endpoint || "—"}, {editing.model_name || "—"})
+                      </code>{" "}
+                      {t("imageSupportAutoResolved")}{" "}
+                      {editing.supports_images ? t("imageSupportYes") : t("imageSupportNo")}
+                    </div>
+                  );
+                })()}
             </div>
 
             {/* Reasoning Effort (OpenAI Responses API only) */}
@@ -715,6 +713,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                       <ImageSupportIndicator
                         mode="custom"
                         imageSupport={model.image_support ?? "auto"}
+                        resolved={model.supports_images ?? true}
                       />
                     </td>
                     <td className="models-table-actions">
