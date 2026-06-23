@@ -1026,6 +1026,8 @@ func (s *Server) buildCreateMessageParams(conversationID string, message llm.Mes
 		LLMData:             message,
 		UserData:            ud,
 		UsageData:           usage,
+		LLMAPIURL:           usage.URL,
+		ModelName:           usage.Model,
 		DisplayData:         ExtractDisplayData(message),
 		ExcludedFromContext: message.ExcludedFromContext,
 		MarkAgentDone:       markAgentDone,

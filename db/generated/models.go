@@ -45,6 +45,8 @@ type Message struct {
 	DisplayData         *string   `json:"display_data"`
 	ExcludedFromContext bool      `json:"excluded_from_context"`
 	Generation          int64     `json:"generation"`
+	LlmApiUrl           *string   `json:"llm_api_url"`
+	ModelName           *string   `json:"model_name"`
 }
 
 type Model struct {

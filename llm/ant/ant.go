@@ -1174,6 +1174,7 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 			result := toLLMResponse(response)
 			result.StartTime = &startTime
 			result.EndTime = &endTime
+			result.URL = url
 			return result, nil
 		default:
 			buf, _ := io.ReadAll(resp.Body)

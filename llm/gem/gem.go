@@ -780,5 +780,6 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 		Usage:      usage,
 		StartTime:  &startTime,
 		EndTime:    &endTime,
+		URL:        cmp.Or(s.URL, gemini.DefaultEndpoint),
 	}, nil
 }

@@ -721,7 +721,9 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 			}
 		}
 
-		return s.toLLMResponseFromResponses(&resp, httpResp.Header), nil
+		result := s.toLLMResponseFromResponses(&resp, httpResp.Header)
+		result.URL = fullURL
+		return result, nil
 	}
 }
 

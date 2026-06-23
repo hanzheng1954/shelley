@@ -870,11 +870,17 @@ const (
 
 // CreateMessageParams contains parameters for creating a message
 type CreateMessageParams struct {
-	ConversationID      string
-	Type                MessageType
-	LLMData             interface{} // Will be JSON marshalled
-	UserData            interface{} // Will be JSON marshalled
-	UsageData           interface{} // Will be JSON marshalled
+	ConversationID string
+	Type           MessageType
+	LLMData        interface{} // Will be JSON marshalled
+	UserData       interface{} // Will be JSON marshalled
+	UsageData      interface{} // Will be JSON marshalled
+	// LLMAPIURL and ModelName promote the LLM endpoint URL and the
+	// provider-reported model name out of UsageData into first-class
+	// columns so they can be queried directly. Empty strings are stored as
+	// NULL (only assistant/agent messages with usage carry them).
+	LLMAPIURL           string
+	ModelName           string
 	DisplayData         interface{} // Will be JSON marshalled, tool-specific display content
 	ExcludedFromContext bool        // If true, message is stored but not sent to LLM
 	// MarkAgentDone, when true, also writes conversations.agent_working=false
@@ -896,6 +902,15 @@ type CreateMessageParams struct {
 	// commit. Most message writes want this; system-prompt and other internal
 	// metadata inserts deliberately leave it false (see the callers in convo.go).
 	BumpTimestamp bool
+}
+
+// nullableString returns nil for an empty string so the column is stored as
+// SQL NULL, and a pointer to the value otherwise.
+func nullableString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // marshalMessageJSON marshals the four JSON columns of a message into the
@@ -966,6 +981,8 @@ func insertMessageTx(ctx context.Context, q *generated.Queries, params CreateMes
 		UsageData:           usageDataJSON,
 		DisplayData:         displayDataJSON,
 		ExcludedFromContext: params.ExcludedFromContext,
+		LlmApiUrl:           nullableString(params.LLMAPIURL),
+		ModelName:           nullableString(params.ModelName),
 	})
 	if err != nil {
 		return generated.Message{}, err

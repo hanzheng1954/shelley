@@ -412,6 +412,7 @@ func (l *Loop) processLLMRequest(ctx context.Context) error {
 		// Record assistant message with model and timing metadata
 		usageWithMeta := resp.Usage
 		usageWithMeta.Model = resp.Model
+		usageWithMeta.URL = resp.URL
 		usageWithMeta.StartTime = resp.StartTime
 		usageWithMeta.EndTime = resp.EndTime
 		if err := l.recordMessage(ctx, assistantMessage, usageWithMeta); err != nil {
@@ -560,6 +561,7 @@ func (l *Loop) handleMaxTokensTruncation(ctx context.Context, resp *llm.Response
 	// Record the truncated message with usage metadata
 	usageWithMeta := resp.Usage
 	usageWithMeta.Model = resp.Model
+	usageWithMeta.URL = resp.URL
 	usageWithMeta.StartTime = resp.StartTime
 	usageWithMeta.EndTime = resp.EndTime
 	if err := l.recordMessage(ctx, truncatedMessage, usageWithMeta); err != nil {

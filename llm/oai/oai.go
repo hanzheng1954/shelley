@@ -1262,7 +1262,13 @@ func (s *Service) Do(ctx context.Context, ir *llm.Request) (*llm.Response, error
 
 		// Handle successful response
 		if err == nil {
-			return s.toLLMResponse(&resp), nil
+			result := s.toLLMResponse(&resp)
+			// Record the endpoint actually used. baseURL omits the
+			// OpenAIURL fallback (the go-openai client applies it
+			// internally), so apply it here to avoid recording a
+			// relative "/chat/completions" path.
+			result.URL = cmp.Or(s.ModelURL, model.URL, OpenAIURL) + "/chat/completions"
+			return result, nil
 		}
 
 		// Handle errors

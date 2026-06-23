@@ -491,6 +491,9 @@ type Response struct {
 	Usage        Usage
 	StartTime    *time.Time
 	EndTime      *time.Time
+	// URL is the LLM API endpoint this response came from. Providers set it
+	// so the loop can record which endpoint produced the usage data.
+	URL string
 }
 
 func (m *Response) ToMessage() Message {
@@ -521,14 +524,18 @@ func CostUSDFromResponse(headers http.Header) float64 {
 // However, the front-end uses this struct, and it relies on its JSON serialization.
 // Do NOT use this struct directly when implementing an llm.Service.
 type Usage struct {
-	InputTokens              uint64     `json:"input_tokens"`
-	CacheCreationInputTokens uint64     `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     uint64     `json:"cache_read_input_tokens"`
-	OutputTokens             uint64     `json:"output_tokens"`
-	CostUSD                  float64    `json:"cost_usd"`
-	Model                    string     `json:"model,omitempty"`
-	StartTime                *time.Time `json:"start_time,omitempty"`
-	EndTime                  *time.Time `json:"end_time,omitempty"`
+	InputTokens              uint64  `json:"input_tokens"`
+	CacheCreationInputTokens uint64  `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     uint64  `json:"cache_read_input_tokens"`
+	OutputTokens             uint64  `json:"output_tokens"`
+	CostUSD                  float64 `json:"cost_usd"`
+	Model                    string  `json:"model,omitempty"`
+	// URL is the LLM API endpoint the request was sent to (e.g.
+	// https://api.anthropic.com/v1/messages). Set by the loop from the
+	// response so it can be recorded alongside the model name.
+	URL       string     `json:"url,omitempty"`
+	StartTime *time.Time `json:"start_time,omitempty"`
+	EndTime   *time.Time `json:"end_time,omitempty"`
 }
 
 func (u *Usage) Add(other Usage) {

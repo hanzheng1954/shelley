@@ -106,6 +106,53 @@ func TestMessageService_Create(t *testing.T) {
 	}
 }
 
+func TestMessageService_LLMModelColumns(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conv, err := db.CreateConversation(ctx, stringPtr("test-conversation"), true, nil, nil, ConversationOptions{})
+	if err != nil {
+		t.Fatalf("Failed to create test conversation: %v", err)
+	}
+
+	// Agent message carries the LLM endpoint URL and model name.
+	agent, err := db.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: conv.ConversationID,
+		Type:           MessageTypeAgent,
+		LLMData:        map[string]string{"response": "hi"},
+		LLMAPIURL:      "https://api.anthropic.com/v1/messages",
+		ModelName:      "claude-opus-4-7",
+	})
+	if err != nil {
+		t.Fatalf("CreateMessage() error = %v", err)
+	}
+	if agent.LlmApiUrl == nil || *agent.LlmApiUrl != "https://api.anthropic.com/v1/messages" {
+		t.Errorf("llm_api_url = %v, want anthropic URL", agent.LlmApiUrl)
+	}
+	if agent.ModelName == nil || *agent.ModelName != "claude-opus-4-7" {
+		t.Errorf("model_name = %v, want claude-opus-4-7", agent.ModelName)
+	}
+
+	// User message has no model metadata: empty strings store as NULL.
+	user, err := db.CreateMessage(ctx, CreateMessageParams{
+		ConversationID: conv.ConversationID,
+		Type:           MessageTypeUser,
+		LLMData:        map[string]string{"content": "hi"},
+	})
+	if err != nil {
+		t.Fatalf("CreateMessage() error = %v", err)
+	}
+	if user.LlmApiUrl != nil {
+		t.Errorf("llm_api_url = %v, want nil", *user.LlmApiUrl)
+	}
+	if user.ModelName != nil {
+		t.Errorf("model_name = %v, want nil", *user.ModelName)
+	}
+}
+
 func TestMessageService_GetByID(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
