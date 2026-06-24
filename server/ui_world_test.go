@@ -20,38 +20,38 @@ func TestResolveUIWorld(t *testing.T) {
 		return r
 	}
 
-	// Default (no override): the vue-ui flag defaults to false -> react.
-	if got := srv.resolveUIWorld(req("/", "")); got != UIWorldReact {
-		t.Fatalf("default world = %q, want react", got)
+	// Default (no override): the vue-ui flag defaults to true -> vue.
+	if got := srv.resolveUIWorld(req("/", "")); got != UIWorldVue {
+		t.Fatalf("default world = %q, want vue", got)
 	}
 
-	// DB override flips the default to vue.
-	if err := database.SetFeatureFlagOverride(ctx, FlagVueUI.Name, "true"); err != nil {
+	// DB override flips the default to react.
+	if err := database.SetFeatureFlagOverride(ctx, FlagVueUI.Name, "false"); err != nil {
 		t.Fatal(err)
 	}
-	if got := srv.resolveUIWorld(req("/", "")); got != UIWorldVue {
-		t.Fatalf("after override world = %q, want vue", got)
+	if got := srv.resolveUIWorld(req("/", "")); got != UIWorldReact {
+		t.Fatalf("after override world = %q, want react", got)
 	}
 
 	// Query param wins over the DB override.
-	if got := srv.resolveUIWorld(req("/?__ui=react", "")); got != UIWorldReact {
-		t.Fatalf("query world = %q, want react", got)
+	if got := srv.resolveUIWorld(req("/?__ui=vue", "")); got != UIWorldVue {
+		t.Fatalf("query world = %q, want vue", got)
 	}
 
 	// Header wins over the DB override (but query wins over header).
-	if got := srv.resolveUIWorld(req("/", "react")); got != UIWorldReact {
-		t.Fatalf("header world = %q, want react", got)
+	if got := srv.resolveUIWorld(req("/", "vue")); got != UIWorldVue {
+		t.Fatalf("header world = %q, want vue", got)
 	}
-	if got := srv.resolveUIWorld(req("/?__ui=vue", "react")); got != UIWorldVue {
-		t.Fatalf("query-over-header world = %q, want vue", got)
+	if got := srv.resolveUIWorld(req("/?__ui=react", "vue")); got != UIWorldReact {
+		t.Fatalf("query-over-header world = %q, want react", got)
 	}
 
-	// Clearing the override returns to the default (react).
+	// Clearing the override returns to the default (vue).
 	if err := database.DeleteFeatureFlagOverride(ctx, FlagVueUI.Name); err != nil {
 		t.Fatal(err)
 	}
-	if got := srv.resolveUIWorld(req("/", "")); got != UIWorldReact {
-		t.Fatalf("after clear world = %q, want react", got)
+	if got := srv.resolveUIWorld(req("/", "")); got != UIWorldVue {
+		t.Fatalf("after clear world = %q, want vue", got)
 	}
 }
 
