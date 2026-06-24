@@ -2977,17 +2977,32 @@ function ChatInterface({
   // edits own the draft for the duration of an editing session; decideDraftSync
   // encapsulates that rule (including the lazy-create snapshot special case).
   const draftInitForRef = useRef<string | null | typeof NO_SESSION>(NO_SESSION);
+  // The row has loaded once currentConversation actually matches the id from
+  // the URL. On a fresh navigation the URL flips conversationId first and the
+  // row arrives a render or two later (or carries a stale neighbor briefly), so
+  // we must not finalize the draft session until they agree.
+  const conversationLoaded =
+    conversationId === null ||
+    conversationId === lazyDraftId ||
+    currentConversation?.conversation_id === conversationId;
   useEffect(() => {
     const decision = decideDraftSync({
       conversationId,
       lazyDraftId,
       isDraft: !!currentConversation?.is_draft,
       serverDraft: currentConversation?.draft || "",
+      conversationLoaded,
       initializedFor: draftInitForRef.current,
     });
     draftInitForRef.current = decision.initializedFor;
     if (decision.adopt) setDraftValue(decision.value);
-  }, [conversationId, currentConversation?.is_draft, currentConversation?.draft, lazyDraftId]);
+  }, [
+    conversationId,
+    currentConversation?.is_draft,
+    currentConversation?.draft,
+    lazyDraftId,
+    conversationLoaded,
+  ]);
 
   const draftConvIdRef = useRef<string | null>(conversationId);
   useEffect(() => {

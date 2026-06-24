@@ -18,6 +18,7 @@ const base: DraftSyncState = {
   lazyDraftId: null,
   isDraft: false,
   serverDraft: "",
+  conversationLoaded: true,
   initializedFor: NO_SESSION,
 };
 
@@ -55,6 +56,7 @@ run("does NOT clobber local edits with a stale autosave echo (the bug)", () => {
     lazyDraftId: null,
     isDraft: true,
     serverDraft: "hello the",
+    conversationLoaded: true,
     initializedFor: first.initializedFor,
   });
   assert(echo.adopt === false, "stale echo for the same draft is NOT adopted");
@@ -72,6 +74,7 @@ run("adopts again only on a genuine switch to a different draft", () => {
     lazyDraftId: null,
     isDraft: true,
     serverDraft: "beta",
+    conversationLoaded: true,
     initializedFor: first.initializedFor,
   });
   assert(switched.adopt === true && switched.value === "beta", "re-seeds on real switch");
@@ -87,6 +90,7 @@ run("ignores the lazy-draft create snapshot (caret/keystroke preservation)", () 
     lazyDraftId: "c9",
     isDraft: true,
     serverDraft: "hi", // stale create-time snapshot
+    conversationLoaded: true,
     initializedFor: newView.initializedFor,
   });
   assert(lazy.adopt === false, "lazy-draft snapshot not adopted");
@@ -97,6 +101,7 @@ run("ignores the lazy-draft create snapshot (caret/keystroke preservation)", () 
     lazyDraftId: "c9",
     isDraft: true,
     serverDraft: "hi the",
+    conversationLoaded: true,
     initializedFor: lazy.initializedFor,
   });
   assert(lazyEcho.adopt === false, "later lazy echo not adopted");
@@ -109,6 +114,100 @@ run("entering a non-draft conversation adopts nothing (composer remounts)", () =
     isDraft: false,
   });
   assert(d.adopt === false, "non-draft entry adopts nothing");
+});
+
+run("seeds the draft when the conversation row arrives AFTER first render (timing)", () => {
+  // Real app lifecycle: navigating to /c/c1 sets conversationId synchronously
+  // from the URL, but currentConversation is derived from the async-loaded
+  // conversation list, so the first render has conversationId="c1" with NO row
+  // yet (conversationLoaded=false). The decision must be DEFERRED -- not
+  // finalized as "non-draft, empty" -- so the row's later arrival still seeds.
+  const r1 = decideDraftSync({
+    conversationId: "c1",
+    lazyDraftId: null,
+    isDraft: false, // row not arrived
+    serverDraft: "",
+    conversationLoaded: false,
+    initializedFor: NO_SESSION,
+  });
+  assert(r1.adopt === false, "render before row arrives adopts nothing");
+
+  // Row arrives: it's a draft with saved text.
+  const r2 = decideDraftSync({
+    conversationId: "c1",
+    lazyDraftId: null,
+    isDraft: true,
+    serverDraft: "saved draft text",
+    conversationLoaded: true,
+    initializedFor: r1.initializedFor,
+  });
+  assert(r2.adopt === true && r2.value === "saved draft text", "draft seeded on row arrival");
+});
+
+run("deferral survives several pre-arrival renders, then seeds once", () => {
+  let state: DraftSyncState = {
+    conversationId: "c1",
+    lazyDraftId: null,
+    isDraft: false,
+    serverDraft: "",
+    conversationLoaded: false,
+    initializedFor: NO_SESSION,
+  };
+  // Multiple renders while the row is still loading (e.g. other state churn).
+  for (let i = 0; i < 3; i++) {
+    const d = decideDraftSync(state);
+    assert(d.adopt === false, "no adopt while pending");
+    state = { ...state, initializedFor: d.initializedFor };
+  }
+  // Row finally arrives.
+  const arrive = decideDraftSync({
+    ...state,
+    isDraft: true,
+    serverDraft: "hi",
+    conversationLoaded: true,
+  });
+  assert(arrive.adopt === true && arrive.value === "hi", "seeds exactly once on arrival");
+  // And a subsequent echo is ignored.
+  const echo = decideDraftSync({
+    conversationId: "c1",
+    lazyDraftId: null,
+    isDraft: true,
+    serverDraft: "hi the",
+    conversationLoaded: true,
+    initializedFor: arrive.initializedFor,
+  });
+  assert(echo.adopt === false, "echo after delayed arrival is ignored");
+});
+
+run("entering a non-draft conversation whose row arrives late adopts nothing, once", () => {
+  const r1 = decideDraftSync({
+    conversationId: "c1",
+    lazyDraftId: null,
+    isDraft: false,
+    serverDraft: "",
+    conversationLoaded: false,
+    initializedFor: NO_SESSION,
+  });
+  assert(r1.adopt === false, "pending adopts nothing");
+  const r2 = decideDraftSync({
+    conversationId: "c1",
+    lazyDraftId: null,
+    isDraft: false, // confirmed non-draft
+    serverDraft: "",
+    conversationLoaded: true,
+    initializedFor: r1.initializedFor,
+  });
+  assert(r2.adopt === false, "non-draft adopts nothing on arrival");
+  // Session now finalized: a later spurious echo is ignored too.
+  const r3 = decideDraftSync({
+    conversationId: "c1",
+    lazyDraftId: null,
+    isDraft: false,
+    serverDraft: "",
+    conversationLoaded: true,
+    initializedFor: r2.initializedFor,
+  });
+  assert(r3.adopt === false, "still nothing");
 });
 
 console.log("\nAll draftSync tests passed.");

@@ -42,6 +42,20 @@ export interface DraftSyncState {
   isDraft: boolean;
   /** The draft text on the current conversation row (server-owned echo). */
   serverDraft: string;
+  /** Whether the conversation row for `conversationId` has actually loaded.
+   *
+   * This guards the real-app timing hole: navigating to /c/<id> sets
+   * conversationId synchronously from the URL, but currentConversation is
+   * derived from the async-loaded conversation list/stream, so there is at
+   * least one render where conversationId is non-null yet the row is absent
+   * (isDraft=false, serverDraft=""). Without this flag we would finalize the
+   * session as "non-draft, empty" on that first render and then ignore the
+   * row's later arrival as a same-session echo -- leaving the textarea blank
+   * for an existing draft. While a non-null conversation is still loading we
+   * DEFER the decision instead. Always true for the `null` new-conversation
+   * view (there is no row to wait for) and for a lazily-created draft (its id
+   * is known synchronously). */
+  conversationLoaded: boolean;
   /** The session id we last seeded local draft state for, as returned by a
    * previous call (start with `NO_SESSION`). */
   initializedFor: string | null | typeof NO_SESSION;
@@ -81,7 +95,17 @@ export function decideDraftSync(state: DraftSyncState): DraftSyncDecision {
     return { adopt: false, value: "", initializedFor: session };
   }
 
-  // Entering a new session. Seed from the server row.
+  // Entering a new session. For a real (non-null) conversation we must wait
+  // for its row to load before deciding: acting on the not-yet-loaded render
+  // would wrongly finalize the session as a non-draft and discard the real
+  // row when it arrives. Defer WITHOUT recording initializedFor, so the next
+  // render (and ultimately the row's arrival) is still treated as entry.
+  // The `null` new-view and lazy drafts are known synchronously, so they skip
+  // this wait (conversationLoaded is always true for them).
+  if (state.conversationId !== null && !state.conversationLoaded) {
+    return { adopt: false, value: "", initializedFor: state.initializedFor };
+  }
+
   if (state.lazyDraftId !== null && state.conversationId === state.lazyDraftId) {
     // The lazy-draft row's snapshot is stale relative to the live textarea;
     // never adopt it. (Same session as `null`, recorded so future echoes for
