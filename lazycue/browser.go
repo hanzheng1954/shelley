@@ -164,15 +164,46 @@ func (b *Browser) ExecuteSteps(ctx context.Context, baseURL string, steps []Step
 // agent can read the value it probed for instead of flying blind.
 func (b *Browser) executeStep(ctx context.Context, baseURL string, step Step) (string, error) {
 	if step.Action == ActionEval {
-		var result interface{}
-		if err := chromedp.Run(b.ctx, chromedp.Evaluate(step.Expression, &result)); err != nil {
-			return "", err
+		// An eval WITHOUT an expectation is a one-shot probe: run once and
+		// return whatever it yields.
+		if step.Expect == "" {
+			var result interface{}
+			if err := chromedp.Run(b.ctx, chromedp.Evaluate(step.Expression, &result)); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("%v", result), nil
 		}
-		got := fmt.Sprintf("%v", result)
-		if step.Expect != "" && got != step.Expect {
-			return got, fmt.Errorf("eval: expected %q, got %q", step.Expect, got)
+		// An eval WITH an expectation is an assertion on async UI state (e.g.
+		// an <img> whose bytes are still loading, or tool output that is still
+		// streaming/rendering). Like wait_visible/wait_text, poll until the
+		// expected value is observed or the timeout expires, so a value that is
+		// merely SLOW to settle under CI load doesn't spuriously fail the step
+		// (which would trigger a costly LLM heal). The assertion is unchanged:
+		// the expected value must still become true within the window.
+		timeout := parseTimeout(step.Timeout, 10*time.Second)
+		deadline := time.Now().Add(timeout)
+		var got string
+		for {
+			var result interface{}
+			if err := chromedp.Run(b.ctx, chromedp.Evaluate(step.Expression, &result)); err != nil {
+				// Transient JS errors (element not present yet) are not fatal
+				// while we still have time to poll.
+				got = "<eval error: " + err.Error() + ">"
+			} else {
+				got = fmt.Sprintf("%v", result)
+				if got == step.Expect {
+					return got, nil
+				}
+			}
+			if time.Now().After(deadline) {
+				return got, fmt.Errorf("eval: expected %q, got %q (after %s)", step.Expect, got, timeout)
+			}
+			select {
+			case <-ctx.Done():
+				return got, ctx.Err()
+			case <-time.After(200 * time.Millisecond):
+			}
 		}
-		return got, nil
 	}
 	return "", b.executeStepErr(ctx, baseURL, step)
 }

@@ -43,7 +43,8 @@
     {
       "action": "eval",
       "expression": "(() =\u003e { const els = document.querySelectorAll('.bash-tool-details .bash-tool-code'); return els[els.length - 1].textContent; })()",
-      "expect": "just plain text with no escapes\n"
+      "expect": "just plain text with no escapes\n",
+      "timeout": "30s"
     },
     {
       "action": "assert_count",

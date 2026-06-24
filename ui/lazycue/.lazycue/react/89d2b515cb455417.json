@@ -34,7 +34,8 @@
     {
       "action": "eval",
       "expression": "(() =\u003e { const img = document.querySelector('.message-agent img'); return img.complete \u0026\u0026 img.naturalWidth \u003e 0; })()",
-      "expect": "true"
+      "expect": "true",
+      "timeout": "30s"
     }
   ],
   "metadata": {
