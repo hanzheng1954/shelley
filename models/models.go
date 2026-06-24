@@ -470,11 +470,7 @@ func (l *loggingService) SupportsServerSideWebSearch() bool {
 }
 
 func (l *loggingService) SupportsImages() bool {
-	type capable interface{ SupportsImages() bool }
-	if c, ok := l.service.(capable); ok {
-		return c.SupportsImages()
-	}
-	return true
+	return l.service.SupportsImages()
 }
 
 // NewManager registers the supplied built-in models, then loads custom

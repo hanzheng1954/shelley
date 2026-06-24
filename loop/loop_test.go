@@ -2436,3 +2436,8 @@ func TestLoopResolvesPauseTurn(t *testing.T) {
 		t.Errorf("expected summed usage input=30 output=13 in %+v", recordedUsage)
 	}
 }
+
+func (e *errorLLMService) SupportsImages() bool     { return true }
+func (r *retryableLLMService) SupportsImages() bool { return true }
+func (s *switchableLLM) SupportsImages() bool       { return true }
+func (p *pauseLLMService) SupportsImages() bool     { return true }

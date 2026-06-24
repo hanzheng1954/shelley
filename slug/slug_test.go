@@ -654,3 +654,7 @@ func TestGenerateSlug_ReasoningModel(t *testing.T) {
 		t.Errorf("expected slug %q, got %q", "parse-json-go", slug)
 	}
 }
+
+func (m *MockLLMService) SupportsImages() bool              { return true }
+func (m *MockLLMServiceWithError) SupportsImages() bool     { return true }
+func (m *MockLLMServiceEmptyResponse) SupportsImages() bool { return true }

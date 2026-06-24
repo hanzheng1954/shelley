@@ -28,6 +28,8 @@ type Service interface {
 	// MaxImageBytes returns the maximum allowed encoded size in bytes for a single image.
 	// Returns 0 if there is no known limit.
 	MaxImageBytes() int
+	// SupportsImages reports whether the service accepts image inputs.
+	SupportsImages() bool
 }
 
 type SimplifiedPatcher interface {

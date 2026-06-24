@@ -381,3 +381,5 @@ func TestLLMOneShotSystemPrompt(t *testing.T) {
 		t.Errorf("expected system prompt, got: %+v", capturedReq.System)
 	}
 }
+
+func (m *oneShotMockService) SupportsImages() bool { return true }

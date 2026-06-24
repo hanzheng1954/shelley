@@ -380,3 +380,5 @@ func TestPreferredToolModelsAreRegistered(t *testing.T) {
 		}
 	}
 }
+
+func (m *mockLLMService) SupportsImages() bool { return true }

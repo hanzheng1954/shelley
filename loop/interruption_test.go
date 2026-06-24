@@ -444,3 +444,5 @@ func TestNoInterruptionNormalFlow(t *testing.T) {
 		t.Log("SUCCESS: Normal flow completed 3 tool calls as expected")
 	}
 }
+
+func (s *customPredictableService) SupportsImages() bool { return true }

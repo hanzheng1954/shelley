@@ -248,6 +248,68 @@ func TestScreenshotTool(t *testing.T) {
 	os.Remove(filePath)
 }
 
+// hasImageContent reports whether any LLM content carries a base64 image
+// payload (a non-empty MediaType like "image/png").
+func hasImageContent(contents []llm.Content) bool {
+	for _, c := range contents {
+		if strings.HasPrefix(c.MediaType, "image/") && c.Data != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// TestScreenshotRunGatesOnImageSupport verifies that the screenshot action
+// only sends image content to models that accept image inputs. Models that
+// don't (e.g. GLM 5.2) get a text-only result so the API doesn't reject the
+// request. The screenshot is still saved to disk and surfaced via Display.
+func TestScreenshotRunGatesOnImageSupport(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping screenshot tool test in short mode")
+	}
+
+	baseCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	tools := NewBrowseTools(baseCtx, 0)
+	t.Cleanup(func() { tools.Close() })
+
+	// Navigate somewhere so a screenshot can be captured.
+	nav := tools.CombinedTool().Run(baseCtx, []byte(`{"action": "navigate", "url": "https://example.com"}`))
+	if nav.Error != nil || (len(nav.LLMContent) > 0 && strings.Contains(nav.LLMContent[0].Text, "browser automation not available")) {
+		t.Skip("Browser automation not available in this environment")
+	}
+
+	t.Run("image-capable model includes image", func(t *testing.T) {
+		ctx := llm.WithLLMService(baseCtx, limitedService{})
+		out := tools.screenshotRun(ctx, screenshotInput{})
+		if out.Error != nil {
+			t.Fatalf("screenshotRun: %v", out.Error)
+		}
+		if !hasImageContent(out.LLMContent) {
+			t.Fatalf("expected image content for image-capable model, got %+v", out.LLMContent)
+		}
+	})
+
+	t.Run("non-image model omits image", func(t *testing.T) {
+		ctx := llm.WithLLMService(baseCtx, noImageService{})
+		out := tools.screenshotRun(ctx, screenshotInput{})
+		if out.Error != nil {
+			t.Fatalf("screenshotRun: %v", out.Error)
+		}
+		if hasImageContent(out.LLMContent) {
+			t.Fatalf("expected no image content for non-image model, got %+v", out.LLMContent)
+		}
+		if len(out.LLMContent) == 0 || !strings.Contains(out.LLMContent[0].Text, "saved as") {
+			t.Fatalf("expected text result mentioning saved path, got %+v", out.LLMContent)
+		}
+		// The screenshot must still be saved and surfaced for the UI.
+		if out.Display == nil {
+			t.Fatal("expected Display payload even without image content")
+		}
+	})
+}
+
 func TestReadImageTool(t *testing.T) {
 	ctx := context.Background()
 	browseTools := NewBrowseTools(ctx, 0)
@@ -450,6 +512,12 @@ type limitedService struct {
 	maxBytes int
 }
 
+// noImageService reports that it does not support image inputs (like GLM 5.2).
+// It embeds limitedService and overrides SupportsImages.
+type noImageService struct{ limitedService }
+
+func (s noImageService) SupportsImages() bool { return false }
+
 func (s limitedService) Do(context.Context, *llm.Request) (*llm.Response, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -457,6 +525,7 @@ func (s limitedService) TokenContextWindow() int { return 0 }
 func (s limitedService) MaxImageDimension() int  { return s.maxDim }
 func (s limitedService) MaxImageBytes() int      { return s.maxBytes }
 func (s limitedService) Provider() string        { return "test" }
+func (s limitedService) SupportsImages() bool    { return true }
 
 func TestReadImageToolResizesOversizedImage(t *testing.T) {
 	browseTools := NewBrowseTools(context.Background(), 0)

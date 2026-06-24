@@ -146,3 +146,5 @@ func TestKeywordRun(t *testing.T) {
 		t.Error("expected LLM content")
 	}
 }
+
+func (m *mockService) SupportsImages() bool { return true }

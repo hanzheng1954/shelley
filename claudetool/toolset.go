@@ -224,7 +224,7 @@ func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) 
 	modelSupportsImages := true
 	if cfg.LLMProvider != nil && cfg.ModelID != "" {
 		if svc, err := cfg.LLMProvider.GetService(cfg.ModelID); err == nil {
-			modelSupportsImages = supportsImages(svc)
+			modelSupportsImages = svc.SupportsImages()
 		}
 	}
 	if cfg.EnableBrowser && IsToolEnabled("read_image", cfg.ToolOverrides, cfg.DisableAllTools) && modelSupportsImages {
@@ -251,22 +251,6 @@ func NewOrchestratorToolSet(ctx context.Context, cfg OrchestratorToolSetConfig) 
 // legacy Chat Completions API does not.
 type ServerSideWebSearchCapable interface {
 	SupportsServerSideWebSearch() bool
-}
-
-// ImageCapable is implemented by services that report whether they accept
-// image inputs. Services that don't implement this default to "supports
-// images" for backwards compatibility.
-type ImageCapable interface {
-	SupportsImages() bool
-}
-
-// supportsImages reports whether the given service accepts image inputs.
-// Defaults to true for services that don't implement ImageCapable.
-func supportsImages(svc llm.Service) bool {
-	if c, ok := svc.(ImageCapable); ok {
-		return c.SupportsImages()
-	}
-	return true
 }
 
 // serverSideTools returns server-side tools appropriate for the given service.
@@ -410,13 +394,14 @@ func NewToolSet(ctx context.Context, cfg ToolSetConfig) *ToolSet {
 		browserTools, browserCleanup := browse.RegisterBrowserTools(ctx)
 		if len(browserTools) > 0 {
 			// If the model doesn't support image inputs, drop read_image — it
-			// returns image content the model cannot consume.
-			// TODO: the `browser` tool's screenshot action also returns images;
-			// we may need to gate or transform it for non-image-capable models.
+			// returns image content the model cannot consume. The `browser`
+			// tool's screenshot action also returns images, but it self-gates
+			// at run time via llm.ServiceFromContext (see browse.screenshotRun),
+			// so the combined browser tool stays available.
 			modelSupportsImages := true
 			if cfg.LLMProvider != nil && cfg.ModelID != "" {
 				if svc, err := cfg.LLMProvider.GetService(cfg.ModelID); err == nil {
-					modelSupportsImages = supportsImages(svc)
+					modelSupportsImages = svc.SupportsImages()
 				}
 			}
 			for _, bt := range browserTools {

@@ -683,3 +683,5 @@ func TestContentCallerCitationsOmitEmpty(t *testing.T) {
 		t.Errorf("reloaded Citations = %q, want nil", reloaded.Citations)
 	}
 }
+
+func (m *mockService) SupportsImages() bool { return true }

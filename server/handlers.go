@@ -2117,12 +2117,6 @@ func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// imageCapable is an optional interface that LLM services may implement to
-// report whether they accept image inputs.
-type imageCapable interface {
-	SupportsImages() bool
-}
-
 // ModelInfo represents a model in the API response
 type ModelInfo struct {
 	ID               string `json:"id"`
@@ -2153,14 +2147,7 @@ func (s *Server) getModelList() []ModelInfo {
 			supportsImages := false
 			if err == nil && svc != nil {
 				maxCtx = svc.TokenContextWindow()
-				if c, ok := svc.(imageCapable); ok {
-					supportsImages = c.SupportsImages()
-				} else {
-					// Services that don't expose the capability are assumed
-					// to support images for backwards compatibility, matching
-					// loggingService.SupportsImages.
-					supportsImages = true
-				}
+				supportsImages = svc.SupportsImages()
 			}
 			info := ModelInfo{ID: id, Ready: err == nil, MaxContextTokens: maxCtx, SupportsImages: supportsImages}
 			// Add display name and source from model info

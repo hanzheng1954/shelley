@@ -581,6 +581,28 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 	// Get the full path to the screenshot
 	screenshotPath := GetScreenshotPath(id)
 
+	display := map[string]any{
+		"type":     "screenshot",
+		"id":       id,
+		"url":      "/api/read?path=" + url.QueryEscape(screenshotPath),
+		"path":     screenshotPath,
+		"selector": input.Selector,
+	}
+
+	// If the model can't consume image inputs (e.g. GLM 5.2), don't send the
+	// image content — the API would reject the request. The screenshot still
+	// gets saved to disk and shown in the UI via Display; the model just gets
+	// a text note with the path. A nil service (tests, ad-hoc callers) is
+	// treated as image-capable.
+	if svc := llm.ServiceFromContext(ctx); svc != nil && !svc.SupportsImages() {
+		return llm.ToolOut{LLMContent: []llm.Content{
+			{
+				Type: llm.ContentTypeText,
+				Text: fmt.Sprintf("Screenshot taken (saved as %s)", screenshotPath),
+			},
+		}, Display: display}
+	}
+
 	// Fit the screenshot inside the model's per-image limits. The full-size
 	// PNG stays on disk at screenshotPath; only the LLM-facing copy is
 	// (potentially) downscaled. A byte-overflow that can't be fixed by
@@ -594,14 +616,6 @@ func (b *BrowseTools) screenshotRun(ctx context.Context, input screenshotInput) 
 	base64Data := base64.StdEncoding.EncodeToString(imageData)
 	mediaType := "image/" + format
 	widthPx, heightPx, _ := imageutil.DecodeDimensions(imageData)
-
-	display := map[string]any{
-		"type":     "screenshot",
-		"id":       id,
-		"url":      "/api/read?path=" + url.QueryEscape(screenshotPath),
-		"path":     screenshotPath,
-		"selector": input.Selector,
-	}
 
 	description := fmt.Sprintf("Screenshot taken (saved as %s)", screenshotPath)
 	if resized {

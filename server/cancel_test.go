@@ -561,3 +561,5 @@ func TestRetryAfterLLMFailure(t *testing.T) {
 		t.Errorf("retry request did not include the original user message")
 	}
 }
+
+func (s *switchableTestLLM) SupportsImages() bool { return s.inner.SupportsImages() }
