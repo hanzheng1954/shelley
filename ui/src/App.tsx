@@ -12,7 +12,10 @@ import { focusMessageInputIfUnfocused } from "./utils/focusMessageInput";
 import { Conversation, ConversationWithState, ConversationListPatchEvent } from "./types";
 import { api } from "./services/api";
 import { messageStore } from "./services/messageStore";
-import { applyConversationListPatch } from "./services/conversationListStream";
+import {
+  reduceConversationListPatch,
+  type ConversationListState,
+} from "./services/conversationListStream";
 import { connectGlobalStream, type StreamStatus } from "./services/globalStream";
 import { handleNotificationEvent } from "./services/notifications";
 import { useI18n } from "./i18n";
@@ -160,7 +163,16 @@ function App() {
   }, []);
   const [showActiveTrigger, setShowActiveTrigger] = useState(0);
   const initialSlugResolved = useRef(false);
-  const conversationListHashRef = useRef<string | null>(null);
+  // The conversation list and the hash it was produced under are a single
+  // coupled value: the patch stream is a strict old_hash->new_hash chain, so a
+  // patch may only be applied to the exact list its old_hash describes. Keeping
+  // them in ONE ref (updated synchronously in handleConversationListPatch)
+  // makes it impossible to advance the hash while the list lags behind in a
+  // deferred React commit — the desync that let a patch built against new
+  // state land on a stale list and corrupt rows (wrong preview on the wrong
+  // conversation). conversationsRef mirrors listStateRef.current.list for the
+  // call sites that only need the list.
+  const listStateRef = useRef<ConversationListState>({ list: [], hash: null });
   const conversationsRef = useRef<ConversationWithState[]>([]);
 
   // Resolve initial slug from URL - uses the captured initialSlugFromUrl
@@ -358,65 +370,62 @@ function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, [conversations]);
 
-  useEffect(() => {
-    conversationsRef.current = conversations;
-  }, [conversations]);
-
-  const syncConversations = useCallback(
-    (updater: (prev: ConversationWithState[]) => ConversationWithState[]) => {
-      setConversations((prev) => {
-        const next = updater(prev);
-        conversationsRef.current = next;
-        return next;
-      });
-    },
-    [],
-  );
+  // commitListState advances the coupled {list, hash} ref atomically and
+  // synchronously, then schedules the React re-render. Both the ref update and
+  // the hash advance happen in the same synchronous turn, so a subsequent SSE
+  // event observes a coherent state (never a new hash paired with an old
+  // list). `conversationsRef` mirrors the list for call sites that only need
+  // it. Callers that don't change the list (e.g. seeding from a snapshot when
+  // a stream hash already exists) shouldn't call this.
+  const commitListState = useCallback((next: ConversationListState) => {
+    listStateRef.current = next;
+    conversationsRef.current = next.list;
+    setConversations(next.list);
+  }, []);
 
   const globalStreamRef = useRef<{ forceReconnect: () => void } | null>(null);
 
   // Recover from an unapplicable patch: drop the stale hash so the next
-  // /api/stream2 connection sends a fresh reset, then force a reconnect.
+  // /api/stream2 connection sends a fresh reset, then force a reconnect. The
+  // list is left intact; the reset will replace it wholesale.
   const recoverConversationListStream = useCallback(() => {
-    conversationListHashRef.current = null;
+    listStateRef.current = { ...listStateRef.current, hash: null };
     globalStreamRef.current?.forceReconnect();
   }, []);
 
   const handleConversationListPatch = useCallback(
     (event: ConversationListPatchEvent) => {
-      const currentHash = conversationListHashRef.current;
-      if (!event.reset && event.old_hash !== currentHash) {
-        // A patch arrived that doesn't anchor to our current state. This is
-        // not necessarily a bug (e.g. cross-event ordering during reconnect),
-        // but applying it would corrupt local state. Drop the hash and force
-        // a reconnect; the server replies with a fresh reset.
-        console.warn("conversation list patch hash mismatch; recovering via reconnect", {
-          eventOldHash: event.old_hash,
-          currentHash,
-        });
-        recoverConversationListStream();
-        return;
-      }
-      // Apply the patch OUTSIDE the React state updater so any error throws
-      // synchronously here (where our try/catch can see it) rather than
-      // during React's commit phase (where it crashes the renderer).
-      const prev = conversationsRef.current;
-      let next: ConversationWithState[];
-      try {
-        next = applyConversationListPatch(prev, event.patch);
-      } catch (err) {
-        console.error("failed to apply conversation list patch; recovering via reconnect", err, {
-          patch: event.patch,
-          prevLen: prev.length,
-        });
-        recoverConversationListStream();
-        return;
-      }
-      const nextIds = new Set(next.map((conv) => conv.conversation_id));
-      for (const conv of prev) {
-        if (!nextIds.has(conv.conversation_id)) {
-          void messageStore.delete(conv.conversation_id);
+      // Apply against the coupled {list, hash} ref. reduceConversationListPatch
+      // verifies the event anchors to our current hash AND applies the patch
+      // before mutating anything, so a mismatch or apply error leaves both
+      // halves untouched and we can recover cleanly. Crucially, `prev` is read
+      // from the same ref whose hash gates the patch, so the two can never
+      // disagree (the bug that landed a patch built against new state onto a
+      // stale list).
+      const prev = listStateRef.current.list;
+      const result = reduceConversationListPatch(listStateRef.current, event);
+      if (!result.ok) {
+        if (result.reason === "hash-mismatch") {
+          // Not necessarily a bug (e.g. cross-event ordering during reconnect),
+          // but applying it would corrupt local state. Drop the hash and force
+          // a reconnect; the server replies with a fresh reset.
+          console.warn("conversation list patch hash mismatch; recovering via reconnect", {
+            eventOldHash: result.eventOldHash,
+            currentHash: listStateRef.current.hash,
+          });
+        } else {
+          console.error(
+            "failed to apply conversation list patch; recovering via reconnect",
+            result.error,
+            { patch: event.patch, prevLen: prev.length },
+          );
         }
+        recoverConversationListStream();
+        return;
+      }
+      const next = result.state.list;
+      for (const removedId of result.removedIds) {
+        void messageStore.delete(removedId);
       }
       // Propagate server-reported max_sequence_id for all conversations in
       // the updated list so ChatInterface can skip unnecessary backfills.
@@ -445,10 +454,9 @@ function App() {
         // conversation list (the source of truth) never disagree.
         messageStore.setAgentWorking(conv.conversation_id, conv.working);
       }
-      syncConversations(() => next);
-      conversationListHashRef.current = event.new_hash;
+      commitListState(result.state);
     },
-    [syncConversations, recoverConversationListStream],
+    [commitListState, recoverConversationListStream],
   );
 
   // Open the single long-lived /api/stream2 connection. The server delivers
@@ -458,7 +466,7 @@ function App() {
   // REST in ChatInterface.
   useEffect(() => {
     const stream = connectGlobalStream({
-      getHash: () => conversationListHashRef.current,
+      getHash: () => listStateRef.current.hash,
       onListPatch: handleConversationListPatch,
       onNotificationEvent: handleNotificationEvent,
       onStatusChange: setStreamStatus,
@@ -504,12 +512,11 @@ function App() {
       // Fire-and-forget; failure here is non-fatal.
       const activeIds = snapshot.conversations.map((c) => c.conversation_id);
       void messageStore.pruneStale(activeIds, 7 * 24 * 60 * 60 * 1000);
-      const streamHash = conversationListHashRef.current;
+      const streamHash = listStateRef.current.hash;
       if (!streamHash) {
-        syncConversations(() => snapshot.conversations);
-        conversationListHashRef.current = snapshot.hash;
+        commitListState({ list: snapshot.conversations, hash: snapshot.hash });
       }
-      const currentList = streamHash ? conversationsRef.current : snapshot.conversations;
+      const currentList = streamHash ? listStateRef.current.list : snapshot.conversations;
       const topLevel = currentList.filter((c) => !c.parent_conversation_id);
 
       // Try to resolve conversation from URL slug first (slug may match a
@@ -736,10 +743,10 @@ function App() {
   ) => {
     try {
       await api.distillNewGeneration(sourceConversationId, model, cwd, method, instructions);
-      // Don't bypass the patch stream here. Setting `conversations` directly
-      // without updating `conversationListHashRef` would desync future patch
-      // events; the stream will deliver the new generation as a regular patch
-      // moments after the API call returns.
+      // Don't bypass the patch stream here. Mutating the list outside
+      // commitListState would desync it from listStateRef's hash and break
+      // future patch application; the stream will deliver the new generation
+      // as a regular patch moments after the API call returns.
       setCurrentConversationId(sourceConversationId);
     } catch (err) {
       console.error("Failed to distill into new generation:", err);

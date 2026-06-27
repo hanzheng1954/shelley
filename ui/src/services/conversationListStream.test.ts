@@ -1,5 +1,9 @@
-import { applyConversationListPatch } from "./conversationListStream";
-import type { ConversationWithState } from "../types";
+import {
+  applyConversationListPatch,
+  reduceConversationListPatch,
+  type ConversationListState,
+} from "./conversationListStream";
+import type { ConversationListPatchEvent, ConversationWithState } from "../types";
 
 function conv(id: string, slug: string, working = false): ConversationWithState {
   return {
@@ -164,6 +168,98 @@ run("add, move, replace, remove stress sequence", () => {
   }
   // Reach the end without throwing.
   assert(Array.isArray(state), "expected final state to be an array");
+});
+
+run("reduce: applies a chain of patches and advances hash atomically", () => {
+  let state: ConversationListState = {
+    list: [conv("a", "alpha"), conv("b", "beta")],
+    hash: "h0",
+  };
+  const ev: ConversationListPatchEvent = {
+    old_hash: "h0",
+    new_hash: "h1",
+    at: "",
+    patch: [{ op: "replace", path: "/0/slug", value: "alpha2" }],
+  };
+  const res = reduceConversationListPatch(state, ev);
+  assert(res.ok, "expected ok");
+  if (res.ok) {
+    assert(res.state.hash === "h1", "expected hash advanced to h1");
+    assert(res.state.list[0].slug === "alpha2", "expected field replaced");
+    state = res.state;
+  }
+});
+
+run("reduce: rejects a patch whose old_hash doesn't anchor to current hash", () => {
+  // This is the core regression: a patch BUILT against a newer state (h1->h2)
+  // must NOT be applied to a list still at h0. Pre-fix, the hash ref could be
+  // advanced to h1 while the list lagged at h0, sneaking this patch through
+  // and corrupting the wrong row (wrong preview on the top conversation).
+  const state: ConversationListState = {
+    list: [conv("a", "alpha"), conv("b", "beta")],
+    hash: "h0",
+  };
+  const ev: ConversationListPatchEvent = {
+    old_hash: "h1",
+    new_hash: "h2",
+    at: "",
+    patch: [{ op: "replace", path: "/0/preview", value: "WRONG" }],
+  };
+  const res = reduceConversationListPatch(state, ev);
+  assert(!res.ok, "expected rejection");
+  if (!res.ok) {
+    assert(res.reason === "hash-mismatch", "expected hash-mismatch reason");
+  }
+  // State is untouched: the caller can recover via reconnect with both halves
+  // still coherent.
+  assert(state.hash === "h0", "expected hash unchanged");
+  assert(state.list[0].slug === "alpha", "expected list unchanged");
+});
+
+run("reduce: reset bypasses the hash check and replaces wholesale", () => {
+  const state: ConversationListState = { list: [conv("a", "alpha")], hash: "stale" };
+  const ev: ConversationListPatchEvent = {
+    old_hash: "unrelated",
+    new_hash: "fresh",
+    at: "",
+    reset: true,
+    patch: [{ op: "replace", path: "", value: [conv("b", "beta"), conv("c", "gamma")] }],
+  };
+  const res = reduceConversationListPatch(state, ev);
+  assert(res.ok, "expected reset to apply");
+  if (res.ok) {
+    assert(res.state.hash === "fresh", "expected fresh hash");
+    assert(res.state.list.map((c) => c.conversation_id).join(",") === "b,c", "expected new list");
+    assert(res.removedIds.join(",") === "a", "expected 'a' reported removed");
+  }
+});
+
+run("reduce: null current hash anchors to event with null old_hash", () => {
+  const state: ConversationListState = { list: [], hash: null };
+  const ev: ConversationListPatchEvent = {
+    old_hash: null,
+    new_hash: "h1",
+    at: "",
+    patch: [{ op: "add", path: "/0", value: conv("a", "alpha") }],
+  };
+  const res = reduceConversationListPatch(state, ev);
+  assert(res.ok, "expected ok when both hashes are null");
+  if (res.ok) assert(res.state.list.length === 1, "expected one conversation");
+});
+
+run("reduce: reports apply-failed without mutating state", () => {
+  const state: ConversationListState = { list: [conv("a", "alpha")], hash: "h0" };
+  const ev: ConversationListPatchEvent = {
+    old_hash: "h0",
+    new_hash: "h1",
+    at: "",
+    // Out-of-range index: the applier throws.
+    patch: [{ op: "remove", path: "/5" }],
+  };
+  const res = reduceConversationListPatch(state, ev);
+  assert(!res.ok, "expected failure");
+  if (!res.ok) assert(res.reason === "apply-failed", "expected apply-failed reason");
+  assert(state.hash === "h0" && state.list.length === 1, "expected state untouched");
 });
 
 console.log("\nConversationListStream tests passed");

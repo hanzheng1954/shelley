@@ -201,7 +201,10 @@ import {
 } from "../types";
 import { api } from "../services/api";
 import { messageStore } from "../services/messageStore";
-import { applyConversationListPatch } from "../services/conversationListStream";
+import {
+  reduceConversationListPatch,
+  type ConversationListState,
+} from "../services/conversationListStream";
 import { connectGlobalStream, type StreamStatus } from "../services/globalStream";
 import { handleNotificationEvent } from "../services/notifications";
 import { useI18n } from "./composables/i18n";
@@ -370,48 +373,57 @@ function navigateToPreviousUserMessage() {
 }
 
 // ---- conversation list patch handling ----
+// The conversation list and the hash it was produced under are a single
+// coupled value: the patch stream is a strict old_hash->new_hash chain, so a
+// patch may only be applied to the exact list its old_hash describes. The
+// reactive `conversations` ref is the template's source of truth; we mirror it
+// (plus the hash) into listState and only ever advance both together via
+// commitListState. This matches the React app's coupled {list, hash} state so
+// neither client can apply a patch built against new state onto a stale list.
+function listStateNow(): ConversationListState {
+  return { list: conversations.value, hash: conversationListHash };
+}
+
+function commitListState(next: ConversationListState) {
+  conversations.value = next.list;
+  conversationListHash = next.hash;
+}
+
 function recoverConversationListStream() {
   conversationListHash = null;
   globalStreamHandle?.forceReconnect();
 }
 
 function handleConversationListPatch(event: ConversationListPatchEvent) {
-  const currentHash = conversationListHash;
-  if (!event.reset && event.old_hash !== currentHash) {
-    console.warn("conversation list patch hash mismatch; recovering via reconnect", {
-      eventOldHash: event.old_hash,
-      currentHash,
-    });
-    recoverConversationListStream();
-    return;
-  }
   const prev = conversations.value;
-  let next: ConversationWithState[];
-  try {
-    next = applyConversationListPatch(prev, event.patch);
-  } catch (err) {
-    console.error("failed to apply conversation list patch; recovering via reconnect", err, {
-      patch: event.patch,
-      prevLen: prev.length,
-    });
+  const result = reduceConversationListPatch(listStateNow(), event);
+  if (!result.ok) {
+    if (result.reason === "hash-mismatch") {
+      console.warn("conversation list patch hash mismatch; recovering via reconnect", {
+        eventOldHash: result.eventOldHash,
+        currentHash: conversationListHash,
+      });
+    } else {
+      console.error(
+        "failed to apply conversation list patch; recovering via reconnect",
+        result.error,
+        { patch: event.patch, prevLen: prev.length },
+      );
+    }
     recoverConversationListStream();
     return;
   }
-  const nextIds = new Set(next.map((conv) => conv.conversation_id));
-  for (const conv of prev) {
-    if (!nextIds.has(conv.conversation_id)) {
-      void messageStore.delete(conv.conversation_id);
-    }
+  for (const removedId of result.removedIds) {
+    void messageStore.delete(removedId);
   }
-  for (const conv of next) {
+  for (const conv of result.state.list) {
     messageStore.setMaxSequenceIdKnown(conv.conversation_id, conv.max_sequence_id);
     // Seed from `working` — the list's authoritative working flag, which the
     // drawer indicator also renders — so the status bar and the conversation
     // list (the source of truth) never disagree.
     messageStore.setAgentWorking(conv.conversation_id, conv.working);
   }
-  conversations.value = next;
-  conversationListHash = event.new_hash;
+  commitListState(result.state);
 }
 
 // ---- initial slug resolution ----
@@ -444,8 +456,7 @@ async function loadConversations() {
     void messageStore.pruneStale(activeIds, 7 * 24 * 60 * 60 * 1000);
     const streamHash = conversationListHash;
     if (!streamHash) {
-      conversations.value = snapshot.conversations;
-      conversationListHash = snapshot.hash;
+      commitListState({ list: snapshot.conversations, hash: snapshot.hash });
     }
     const currentList = streamHash ? conversations.value : snapshot.conversations;
     const topLevel = currentList.filter((c) => !c.parent_conversation_id);
