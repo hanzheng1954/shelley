@@ -107,13 +107,25 @@ run("ignores the lazy-draft create snapshot (caret/keystroke preservation)", () 
   assert(lazyEcho.adopt === false, "later lazy echo not adopted");
 });
 
-run("entering a non-draft conversation adopts nothing (composer remounts)", () => {
+run("entering a non-draft conversation seeds an empty baseline once", () => {
+  // The server holds no next-message draft for a non-draft conversation, so
+  // the baseline is empty; the caller overlays any locally-cached draft. We
+  // still adopt (not skip) so switching INTO a conversation clears the
+  // composer of the previous one -- ChatInterface keeps a single composer.
   const d = decideDraftSync({
     ...base,
     conversationId: "c1",
     isDraft: false,
   });
-  assert(d.adopt === false, "non-draft entry adopts nothing");
+  assert(d.adopt === true && d.value === "", "non-draft entry seeds empty baseline");
+  // Echo within the same session must NOT re-seed (would wipe local edits).
+  const echo = decideDraftSync({
+    ...base,
+    conversationId: "c1",
+    isDraft: false,
+    initializedFor: d.initializedFor,
+  });
+  assert(echo.adopt === false, "same-session echo does not re-seed");
 });
 
 run("seeds the draft when the conversation row arrives AFTER first render (timing)", () => {
@@ -197,7 +209,7 @@ run("entering a non-draft conversation whose row arrives late adopts nothing, on
     conversationLoaded: true,
     initializedFor: r1.initializedFor,
   });
-  assert(r2.adopt === false, "non-draft adopts nothing on arrival");
+  assert(r2.adopt === true && r2.value === "", "non-draft seeds empty baseline on arrival");
   // Session now finalized: a later spurious echo is ignored too.
   const r3 = decideDraftSync({
     conversationId: "c1",
@@ -207,7 +219,7 @@ run("entering a non-draft conversation whose row arrives late adopts nothing, on
     conversationLoaded: true,
     initializedFor: r2.initializedFor,
   });
-  assert(r3.adopt === false, "still nothing");
+  assert(r3.adopt === false, "echo after arrival does not re-seed");
 });
 
 console.log("\nAll draftSync tests passed.");

@@ -119,7 +119,8 @@ export function decideDraftSync(state: DraftSyncState): DraftSyncDecision {
     // Fresh new-conversation view: start empty.
     return { adopt: true, value: "", initializedFor: session };
   }
-  // A non-draft conversation: the composer is keyed by conversationId and
-  // remounts, re-seeding from its own state, so there's nothing to adopt here.
-  return { adopt: false, value: "", initializedFor: session };
+  // A non-draft conversation: seed the composer once on entry. The server
+  // holds no next-message draft for it, so the baseline is empty; the caller
+  // overlays any locally-cached next-message draft (client-side only).
+  return { adopt: true, value: "", initializedFor: session };
 }

@@ -1428,13 +1428,12 @@ function handleDraftChange(value: string) {
   // to; on next load that stamp is >= the (frozen, on failure) server
   // updated_at, so the cached text wins.
   //
-  // Only mirror for sessions the load path actually reconciles from: the
-  // new-conversation view and real drafts. An already-sent conversation's
-  // composer also routes keystrokes here, but its text is never read back, so
-  // caching it would just leak a dead localStorage key per conversation.
-  if (!props.conversationId || props.currentConversation?.is_draft) {
-    saveCachedDraft(draftConvId, value, draftSyncedAt);
-  }
+  // Every session's composer is mirrored: the new-conversation view, real
+  // drafts, and the next-message composer of an already-sent conversation
+  // (client-side only, no server draft). draftSyncedAt is the last server
+  // updated_at for draft/new sessions and "" for non-draft ones (nothing to
+  // reconcile against; the cache is authoritative).
+  saveCachedDraft(draftConvId, value, draftSyncedAt);
   draftAutosave.schedule(value);
 }
 function handleDraftSendStarted() {
@@ -1763,7 +1762,17 @@ watch([() => props.conversationId, lazyDraftId], () => {
   if (lazyDraftId.value && props.conversationId !== lazyDraftId.value) lazyDraftId.value = null;
 });
 
-// Initialize draftValue from the conversation row when switching into a draft.
+// The session (conversation id) we last seeded the composer for. Guards the
+// non-draft branch from re-seeding on echoes (e.g. updated_at bumps from new
+// messages), which would wipe in-progress local edits. "" sentinel != any real
+// id and != the null new-view session, so the first run always seeds.
+let lastSeededSession: string | null | undefined = undefined;
+
+// Initialize draftValue from the conversation row when switching conversations.
+// Drafts and the new-conversation view reconcile the server copy with the
+// localStorage mirror via updated_at; non-draft conversations have no
+// server-side next-message draft, so their localStorage mirror is
+// authoritative (client-side only).
 watch(
   [
     () => props.conversationId,
@@ -1784,10 +1793,18 @@ watch(
       );
       draftSyncedAt = serverUpdatedAt;
       draftValue.value = picked.value;
+      lastSeededSession = props.conversationId;
     } else if (!props.conversationId) {
       const picked = pickDraft({ value: "", updatedAt: "" }, loadCachedDraft(null));
       draftSyncedAt = "";
       draftValue.value = picked.value;
+      lastSeededSession = null;
+    } else if (lastSeededSession !== props.conversationId) {
+      // Non-draft conversation, first entry: the cache is authoritative; seed
+      // from it (or empty) exactly once so echoes don't clobber local edits.
+      draftSyncedAt = "";
+      draftValue.value = loadCachedDraft(props.conversationId)?.value ?? "";
+      lastSeededSession = props.conversationId;
     }
   },
   { immediate: true },

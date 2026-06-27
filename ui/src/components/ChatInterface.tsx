@@ -3015,17 +3015,22 @@ function ChatInterface({
     });
     draftInitForRef.current = decision.initializedFor;
     if (decision.adopt) {
-      // Reconcile the server's copy with any locally-cached keystrokes that
-      // never reached (or outraced) the server. The cache is keyed by the
-      // session id: `null` for the new-conversation view, otherwise the
-      // draft conversation id.
-      const serverUpdatedAt = currentConversation?.updated_at || "";
-      const picked = pickDraft(
-        { value: decision.value, updatedAt: serverUpdatedAt },
-        loadCachedDraft(conversationId),
-      );
-      draftSyncedAtRef.current = serverUpdatedAt;
-      setDraftValue(picked.value);
+      const cached = loadCachedDraft(conversationId);
+      if (conversationId === null || currentConversation?.is_draft) {
+        // New-conversation view / draft conversation: the server holds a copy,
+        // so reconcile it with any locally-cached keystrokes that never reached
+        // (or outraced) the server, arbitrated by updated_at.
+        const serverUpdatedAt = currentConversation?.updated_at || "";
+        const picked = pickDraft({ value: decision.value, updatedAt: serverUpdatedAt }, cached);
+        draftSyncedAtRef.current = serverUpdatedAt;
+        setDraftValue(picked.value);
+      } else {
+        // Non-draft conversation: the next-message composer has no server-side
+        // draft, so the cache is authoritative (client-side only). There is
+        // nothing to reconcile, hence no updated_at stamp.
+        draftSyncedAtRef.current = "";
+        setDraftValue(cached?.value ?? "");
+      }
     }
   }, [
     conversationId,
@@ -3131,14 +3136,12 @@ function ChatInterface({
       // next load that stamp is >= the (frozen, on failure) server updated_at,
       // so the cached text wins. Keyed by the live session id (null = view).
       //
-      // Only mirror for sessions the load path actually reconciles from: the
-      // new-conversation view and real drafts (see decideDraftSync). The
-      // composer of an already-sent conversation also routes keystrokes here,
-      // but its text is never read back, so caching it would just leak a dead
-      // localStorage key per conversation.
-      if (conversationId === null || currentConversation?.is_draft) {
-        saveCachedDraft(draftConvIdRef.current, value, draftSyncedAtRef.current);
-      }
+      // Every session's composer is mirrored: the new-conversation view, real
+      // drafts, and the next-message composer of an already-sent conversation
+      // (client-side only, no server draft). draftSyncedAtRef is the last
+      // server updated_at for draft/new sessions and "" for non-draft ones
+      // (nothing to reconcile against; the cache is authoritative).
+      saveCachedDraft(draftConvIdRef.current, value, draftSyncedAtRef.current);
       draftAutosave.schedule(value);
     },
     [draftAutosave, conversationId, currentConversation?.is_draft],

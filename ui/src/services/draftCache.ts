@@ -22,6 +22,13 @@
 //
 // We never try to flush localStorage back to the server; on the next keystroke
 // the normal autosave carries the merged text forward and the two converge.
+//
+// Two kinds of session use this cache:
+//   * Draft / new-conversation sessions HAVE a server copy, so they reconcile
+//     via pickDraft() + `basedOn` as described above.
+//   * The next-message composer of an already-sent (non-draft) conversation
+//     has NO server-side draft, so its cache entry is authoritative: the
+//     caller reads `value` directly and ignores `basedOn` (stored as "").
 
 const PREFIX = "shelley-draft:";
 
@@ -89,11 +96,7 @@ export interface DraftCandidate {
 // newer than `basedOn`, the server has changes the cache predates (e.g. an
 // edit from another tab), so the server wins.
 export function pickDraft(server: DraftCandidate, local: CachedDraft | null): DraftCandidate {
-  if (
-    local &&
-    local.value !== server.value &&
-    local.basedOn >= server.updatedAt
-  ) {
+  if (local && local.value !== server.value && local.basedOn >= server.updatedAt) {
     return { value: local.value, updatedAt: server.updatedAt };
   }
   return server;
