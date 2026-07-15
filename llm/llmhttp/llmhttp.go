@@ -28,6 +28,7 @@ const (
 	requestTraceKey
 	purposeKey
 	usageCollectorKey
+	userAgentKey
 )
 
 // shelleyRequestIDHeader is the header Shelley sets on every LLM request with a
@@ -236,6 +237,20 @@ func ProviderFromContext(ctx context.Context) string {
 	return ""
 }
 
+// WithUserAgent returns a context that overrides Shelley's default User-Agent.
+// An empty value preserves the default.
+func WithUserAgent(ctx context.Context, userAgent string) context.Context {
+	return context.WithValue(ctx, userAgentKey, userAgent)
+}
+
+// UserAgentFromContext returns the configured User-Agent override, if any.
+func UserAgentFromContext(ctx context.Context) string {
+	if v := ctx.Value(userAgentKey); v != nil {
+		return v.(string)
+	}
+	return ""
+}
+
 // ErrIdleTimeout is returned (wrapped) when a response stream makes no
 // progress — no bytes received — for longer than the configured idle timeout.
 // Callers can test for it with errors.Is. It is deliberately distinct from
@@ -266,11 +281,14 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Clone the request to avoid modifying the original
 	req = req.Clone(req.Context())
 
-	// Add User-Agent with Shelley version
-	info := version.GetInfo()
-	userAgent := "Shelley"
-	if info.Commit != "" {
-		userAgent += "/" + info.Commit[:min(8, len(info.Commit))]
+	// Add the per-model override or Shelley's default User-Agent.
+	userAgent := UserAgentFromContext(req.Context())
+	if userAgent == "" {
+		info := version.GetInfo()
+		userAgent = "Shelley"
+		if info.Commit != "" {
+			userAgent += "/" + info.Commit[:min(8, len(info.Commit))]
+		}
 	}
 	req.Header.Set("User-Agent", userAgent)
 
