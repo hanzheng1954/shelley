@@ -130,6 +130,7 @@ export interface FormData {
   model_name: string;
   max_tokens: number;
   reasoning_effort: string;
+  user_agent: string;
   reasoning_replay: "auto" | "none" | "reasoning_content";
   reasoning_support: "auto" | "yes" | "no";
   reasoning_map: ReasoningMap;
@@ -144,6 +145,7 @@ export const emptyForm: FormData = {
   model_name: "",
   max_tokens: 0,
   reasoning_effort: "",
+  user_agent: "",
   reasoning_replay: "auto",
   reasoning_support: "auto",
   reasoning_map: { ...DEFAULT_REASONING_MAP },

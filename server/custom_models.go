@@ -13,6 +13,7 @@ import (
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/gem"
+	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models"
 )
@@ -27,6 +28,7 @@ type ModelAPI struct {
 	ModelName       string `json:"model_name"`
 	MaxTokens       int64  `json:"max_tokens"`
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+	UserAgent       string `json:"user_agent"`
 	// ReasoningReplay is "auto", "none", or "reasoning_content".
 	ReasoningReplay         oai.ReasoningReplay `json:"reasoning_replay"`
 	ResolvedReasoningReplay oai.ReasoningReplay `json:"resolved_reasoning_replay,omitempty"`
@@ -50,6 +52,7 @@ type CreateModelRequest struct {
 	ModelName        string              `json:"model_name"`
 	MaxTokens        int64               `json:"max_tokens"`
 	ReasoningEffort  string              `json:"reasoning_effort,omitempty"`
+	UserAgent        string              `json:"user_agent"`
 	ReasoningReplay  oai.ReasoningReplay `json:"reasoning_replay,omitempty"`
 	ImageSupport     string              `json:"image_support"`     // "auto"|"yes"|"no"; empty = "auto"
 	ReasoningSupport string              `json:"reasoning_support"` // "auto"|"yes"|"no"; empty = "auto"
@@ -65,6 +68,7 @@ type UpdateModelRequest struct {
 	ModelName        string               `json:"model_name"`
 	MaxTokens        *int64               `json:"max_tokens"`
 	ReasoningEffort  *string              `json:"reasoning_effort,omitempty"`
+	UserAgent        *string              `json:"user_agent"` // Nil preserves existing; empty clears override
 	ReasoningReplay  *oai.ReasoningReplay `json:"reasoning_replay,omitempty"`
 	ImageSupport     string               `json:"image_support"`     // "auto"|"yes"|"no"; empty preserves existing
 	ReasoningSupport string               `json:"reasoning_support"` // "auto"|"yes"|"no"; empty preserves existing
@@ -138,6 +142,7 @@ type TestModelRequest struct {
 	ReasoningSupport string               `json:"reasoning_support"`
 	ReasoningMap     string               `json:"reasoning_map"`
 	ReasoningEffort  *string              `json:"reasoning_effort,omitempty"`
+	UserAgent        string               `json:"user_agent"`
 	ReasoningReplay  *oai.ReasoningReplay `json:"reasoning_replay,omitempty"`
 }
 
@@ -152,6 +157,7 @@ func toModelAPI(m generated.Model) ModelAPI {
 		ModelName:               m.ModelName,
 		MaxTokens:               m.MaxTokens,
 		ReasoningEffort:         m.ReasoningEffort,
+		UserAgent:               m.UserAgent,
 		ReasoningReplay:         reasoningReplay,
 		ResolvedReasoningReplay: oai.ResolveReasoningReplay(m.Endpoint, m.ModelName, reasoningReplay),
 		ImageSupport:            m.ImageSupport,
@@ -240,6 +246,7 @@ func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 		ImageSupport:     imageSupport,
 		ReasoningSupport: reasoningSupport,
 		ReasoningMap:     req.ReasoningMap,
+		UserAgent:        strings.TrimSpace(req.UserAgent),
 		ReasoningReplay:  string(reasoningReplay),
 	})
 	if err != nil {
@@ -332,6 +339,10 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 			return
 		}
 	}
+	userAgent := existing.UserAgent
+	if req.UserAgent != nil {
+		userAgent = strings.TrimSpace(*req.UserAgent)
+	}
 
 	model, err := s.db.UpdateModel(r.Context(), generated.UpdateModelParams{
 		DisplayName:      req.DisplayName,
@@ -344,6 +355,7 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 		ImageSupport:     imageSupport,
 		ReasoningSupport: reasoningSupport,
 		ReasoningMap:     req.ReasoningMap,
+		UserAgent:        userAgent,
 		ReasoningReplay:  string(reasoningReplay),
 		ModelID:          modelID,
 	})
@@ -425,6 +437,7 @@ func (s *Server) handleDuplicateModel(w http.ResponseWriter, r *http.Request, mo
 		ImageSupport:     source.ImageSupport,
 		ReasoningSupport: source.ReasoningSupport,
 		ReasoningMap:     source.ReasoningMap,
+		UserAgent:        source.UserAgent,
 		ReasoningReplay:  source.ReasoningReplay,
 	})
 	if err != nil {
@@ -473,6 +486,9 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			reasoningReplay := oai.ReasoningReplay(model.ReasoningReplay)
 			req.ReasoningReplay = &reasoningReplay
 		}
+		if req.UserAgent == "" {
+			req.UserAgent = model.UserAgent
+		}
 	}
 
 	if req.ProviderType == "" || req.Endpoint == "" || req.APIKey == "" || req.ModelName == "" {
@@ -501,6 +517,9 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	// Test with the same shared transport used at runtime.
+	testClient := llmhttp.NewClient(nil)
 	// Create the appropriate service based on provider type
 	var service llm.Service
 	switch req.ProviderType {
@@ -511,6 +530,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			Model:         req.ModelName,
 			MaxTokens:     int(maxTokens),
 			ThinkingLevel: llm.ThinkingLevelMedium,
+			HTTPC:         testClient,
 		}
 	case "openai":
 		service = &oai.Service{
@@ -528,6 +548,8 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 				IsReasoningModel: false,
 				SupportsImages:   true,
 			},
+			HTTPC:        testClient,
+			ProviderName: "openai",
 		}
 	case "gemini":
 		service = &gem.Service{
@@ -536,6 +558,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			Model:           req.ModelName,
 			MaxTokens:       int(maxTokens),
 			ReasoningEffort: reasoningEffort,
+			HTTPC:           testClient,
 		}
 	case "openai-responses":
 		service = &oai.ResponsesService{
@@ -555,6 +578,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			ThinkingLevel:   llm.ThinkingLevelMedium,
 			ReasoningEffort: reasoningEffort,
 			ReasoningReplay: reasoningReplay,
+			HTTPC:           testClient,
 		}
 	default:
 		http.Error(w, "Invalid provider_type", http.StatusBadRequest)
@@ -573,6 +597,9 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 	// Send a simple test request
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	if req.UserAgent != "" {
+		ctx = llmhttp.WithUserAgent(ctx, strings.TrimSpace(req.UserAgent))
+	}
 
 	request := &llm.Request{
 		Messages: []llm.Message{

@@ -1,6 +1,7 @@
 package llmhttp
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -51,6 +52,12 @@ func TestContextFunctions(t *testing.T) {
 		t.Errorf("ProviderFromContext() = %q, want %q", got, "anthropic")
 	}
 
+	// Test User-Agent override
+	ctx = WithUserAgent(ctx, "custom-agent/1.0")
+	if got := UserAgentFromContext(ctx); got != "custom-agent/1.0" {
+		t.Errorf("UserAgentFromContext() = %q, want %q", got, "custom-agent/1.0")
+	}
+
 	// Test empty context
 	emptyCtx := t.Context()
 	if got := ConversationIDFromContext(emptyCtx); got != "" {
@@ -61,6 +68,9 @@ func TestContextFunctions(t *testing.T) {
 	}
 	if got := ProviderFromContext(emptyCtx); got != "" {
 		t.Errorf("ProviderFromContext(empty) = %q, want empty", got)
+	}
+	if got := UserAgentFromContext(emptyCtx); got != "" {
+		t.Errorf("UserAgentFromContext(empty) = %q, want empty", got)
 	}
 }
 
@@ -102,6 +112,29 @@ func TestTransportAddsHeaders(t *testing.T) {
 	}
 	if got := receivedHeaders.Get("session-id"); got != "" {
 		t.Errorf("session-id = %q, want empty for non-openai", got)
+	}
+}
+
+func TestTransportUsesUserAgentOverride(t *testing.T) {
+	var got string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("User-Agent")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	ctx := WithUserAgent(context.Background(), "codex_cli_rs/0.144.0")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := NewClient(nil).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if got != "codex_cli_rs/0.144.0" {
+		t.Fatalf("User-Agent = %q, want override", got)
 	}
 }
 

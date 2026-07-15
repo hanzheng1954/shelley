@@ -521,6 +521,7 @@ type serviceEntry struct {
 	source          string
 	displayName     string
 	releaseDate     string
+	userAgent       string
 	baseURL         string
 	apiType         APIType
 	// apiModelName is the wire model name used for models.dev lookups.
@@ -534,47 +535,55 @@ type ConfigInfo interface {
 
 // loggingService wraps an llm.Service with request/usage logging.
 type loggingService struct {
-	service  llm.Service
-	logger   *slog.Logger
-	modelID  string
-	provider Provider
+	service   llm.Service
+	logger    *slog.Logger
+	modelID   string
+	provider  Provider
+	userAgent string
 }
 
 func (l *loggingService) Do(ctx context.Context, request *llm.Request) (*llm.Response, error) {
 	start := time.Now()
 	ctx = llmhttp.WithModelID(ctx, l.modelID)
 	ctx = llmhttp.WithProvider(ctx, string(l.provider))
+	if l.userAgent != "" {
+		ctx = llmhttp.WithUserAgent(ctx, l.userAgent)
+	}
 	response, err := l.service.Do(ctx, request)
 	durationSeconds := time.Since(start).Seconds()
 
 	if err != nil {
-		logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
-		if configProvider, ok := l.service.(ConfigInfo); ok {
-			for k, v := range configProvider.ConfigDetails() {
-				logAttrs = append(logAttrs, k, v)
+		if l.logger != nil {
+			logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
+			if configProvider, ok := l.service.(ConfigInfo); ok {
+				for k, v := range configProvider.ConfigDetails() {
+					logAttrs = append(logAttrs, k, v)
+				}
 			}
+			logAttrs = append(logAttrs, "error", err)
+			l.logger.Error("LLM request failed", logAttrs...)
 		}
-		logAttrs = append(logAttrs, "error", err)
-		l.logger.Error("LLM request failed", logAttrs...)
 		return response, err
 	}
 
-	logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
-	if !response.Usage.IsZero() {
-		logAttrs = append(
-			logAttrs,
-			"input_tokens", response.Usage.InputTokens,
-			"output_tokens", response.Usage.OutputTokens,
-			"cost_usd", response.Usage.CostUSD,
-		)
-		if response.Usage.CacheCreationInputTokens > 0 {
-			logAttrs = append(logAttrs, "cache_creation_input_tokens", response.Usage.CacheCreationInputTokens)
+	if l.logger != nil {
+		logAttrs := []any{"model", l.modelID, "duration_seconds", durationSeconds}
+		if !response.Usage.IsZero() {
+			logAttrs = append(
+				logAttrs,
+				"input_tokens", response.Usage.InputTokens,
+				"output_tokens", response.Usage.OutputTokens,
+				"cost_usd", response.Usage.CostUSD,
+			)
+			if response.Usage.CacheCreationInputTokens > 0 {
+				logAttrs = append(logAttrs, "cache_creation_input_tokens", response.Usage.CacheCreationInputTokens)
+			}
+			if response.Usage.CacheReadInputTokens > 0 {
+				logAttrs = append(logAttrs, "cache_read_input_tokens", response.Usage.CacheReadInputTokens)
+			}
 		}
-		if response.Usage.CacheReadInputTokens > 0 {
-			logAttrs = append(logAttrs, "cache_read_input_tokens", response.Usage.CacheReadInputTokens)
-		}
+		l.logger.Info("LLM request completed", logAttrs...)
 	}
-	l.logger.Info("LLM request completed", logAttrs...)
 	if purpose := llm.PurposeFromContext(ctx); purpose != "" && !response.Usage.IsZero() {
 		if collect := llm.UsageCollectorFromContext(ctx); collect != nil {
 			usage := response.UsageWithMeta()
@@ -725,6 +734,7 @@ func (m *Manager) customModelEntry(model generated.Model) serviceEntry {
 		modelID:         model.ModelID,
 		source:          SourceCustomLabel,
 		displayName:     model.DisplayName,
+		userAgent:       model.UserAgent,
 		baseURL:         model.Endpoint,
 		apiModelName:    model.ModelName,
 	}
@@ -796,12 +806,13 @@ func (m *Manager) GetService(modelID string) (llm.Service, error) {
 }
 
 func (m *Manager) loggedService(entry serviceEntry) llm.Service {
-	if m.logger != nil {
+	if m.logger != nil || entry.userAgent != "" {
 		return &loggingService{
-			service:  entry.service,
-			logger:   m.logger,
-			modelID:  entry.modelID,
-			provider: entry.provider,
+			service:   entry.service,
+			logger:    m.logger,
+			modelID:   entry.modelID,
+			provider:  entry.provider,
+			userAgent: entry.userAgent,
 		}
 	}
 	return entry.service
