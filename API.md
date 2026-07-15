@@ -276,7 +276,12 @@ fresh reset event.
   OpenAI-compatible models accept `reasoning_replay` as `auto`,
   `reasoning_content`, or `none`; responses include
   `resolved_reasoning_replay` when catalog resolution is known.
-- `POST /api/custom-models-test` — test a custom model config.
+  Custom models accept an optional `user_agent` string. When set, Shelley uses
+  it as the outbound `User-Agent` for that model; when empty, Shelley sends its
+  normal `Shelley/<commit>` value.
+- `POST /api/custom-models-test` — test a custom model config. The request also
+  accepts `user_agent`, so client-restricted providers can be tested before the
+  model is saved.
 - `GET/POST/PUT/DELETE /api/notification-channels[/<id>]`,
   `GET /api/notification-channel-types` — notification CRUD.
 

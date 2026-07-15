@@ -10,9 +10,9 @@ import (
 )
 
 const createModel = `-- name: CreateModel :one
-INSERT INTO models (model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, reasoning_effort, image_support, reasoning_support, reasoning_map, reasoning_replay)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, reasoning_support, reasoning_map, reasoning_replay
+INSERT INTO models (model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, reasoning_effort, image_support, user_agent, reasoning_support, reasoning_map, reasoning_replay)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent, reasoning_support, reasoning_map, reasoning_replay
 `
 
 type CreateModelParams struct {
@@ -26,6 +26,7 @@ type CreateModelParams struct {
 	Tags             string `json:"tags"`
 	ReasoningEffort  string `json:"reasoning_effort"`
 	ImageSupport     string `json:"image_support"`
+	UserAgent        string `json:"user_agent"`
 	ReasoningSupport string `json:"reasoning_support"`
 	ReasoningMap     string `json:"reasoning_map"`
 	ReasoningReplay  string `json:"reasoning_replay"`
@@ -43,6 +44,7 @@ func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Model
 		arg.Tags,
 		arg.ReasoningEffort,
 		arg.ImageSupport,
+		arg.UserAgent,
 		arg.ReasoningSupport,
 		arg.ReasoningMap,
 		arg.ReasoningReplay,
@@ -61,6 +63,7 @@ func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Model
 		&i.UpdatedAt,
 		&i.ReasoningEffort,
 		&i.ImageSupport,
+		&i.UserAgent,
 		&i.ReasoningSupport,
 		&i.ReasoningMap,
 		&i.ReasoningReplay,
@@ -78,7 +81,7 @@ func (q *Queries) DeleteModel(ctx context.Context, modelID string) error {
 }
 
 const getModel = `-- name: GetModel :one
-SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, reasoning_support, reasoning_map, reasoning_replay FROM models WHERE model_id = ?
+SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent, reasoning_support, reasoning_map, reasoning_replay FROM models WHERE model_id = ?
 `
 
 func (q *Queries) GetModel(ctx context.Context, modelID string) (Model, error) {
@@ -97,6 +100,7 @@ func (q *Queries) GetModel(ctx context.Context, modelID string) (Model, error) {
 		&i.UpdatedAt,
 		&i.ReasoningEffort,
 		&i.ImageSupport,
+		&i.UserAgent,
 		&i.ReasoningSupport,
 		&i.ReasoningMap,
 		&i.ReasoningReplay,
@@ -105,7 +109,7 @@ func (q *Queries) GetModel(ctx context.Context, modelID string) (Model, error) {
 }
 
 const getModels = `-- name: GetModels :many
-SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, reasoning_support, reasoning_map, reasoning_replay FROM models ORDER BY created_at ASC
+SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent, reasoning_support, reasoning_map, reasoning_replay FROM models ORDER BY created_at ASC
 `
 
 func (q *Queries) GetModels(ctx context.Context) ([]Model, error) {
@@ -130,6 +134,7 @@ func (q *Queries) GetModels(ctx context.Context) ([]Model, error) {
 			&i.UpdatedAt,
 			&i.ReasoningEffort,
 			&i.ImageSupport,
+			&i.UserAgent,
 			&i.ReasoningSupport,
 			&i.ReasoningMap,
 			&i.ReasoningReplay,
@@ -158,12 +163,13 @@ SET display_name = ?,
     tags = ?,
     reasoning_effort = ?,
     image_support = ?,
+    user_agent = ?,
     reasoning_support = ?,
     reasoning_map = ?,
     reasoning_replay = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE model_id = ?
-RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, reasoning_support, reasoning_map, reasoning_replay
+RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent, reasoning_support, reasoning_map, reasoning_replay
 `
 
 type UpdateModelParams struct {
@@ -176,6 +182,7 @@ type UpdateModelParams struct {
 	Tags             string `json:"tags"`
 	ReasoningEffort  string `json:"reasoning_effort"`
 	ImageSupport     string `json:"image_support"`
+	UserAgent        string `json:"user_agent"`
 	ReasoningSupport string `json:"reasoning_support"`
 	ReasoningMap     string `json:"reasoning_map"`
 	ReasoningReplay  string `json:"reasoning_replay"`
@@ -193,6 +200,7 @@ func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (Model
 		arg.Tags,
 		arg.ReasoningEffort,
 		arg.ImageSupport,
+		arg.UserAgent,
 		arg.ReasoningSupport,
 		arg.ReasoningMap,
 		arg.ReasoningReplay,
@@ -212,6 +220,7 @@ func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (Model
 		&i.UpdatedAt,
 		&i.ReasoningEffort,
 		&i.ImageSupport,
+		&i.UserAgent,
 		&i.ReasoningSupport,
 		&i.ReasoningMap,
 		&i.ReasoningReplay,

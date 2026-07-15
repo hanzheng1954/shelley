@@ -108,6 +108,21 @@
         />
       </div>
 
+      <!-- User-Agent override -->
+      <div class="form-group">
+        <label>User-Agent</label>
+        <input
+          v-model="form.user_agent"
+          type="text"
+          placeholder="Shelley default (for example: codex_cli_rs/0.144.0)"
+          class="form-input"
+          autocomplete="off"
+        />
+        <div class="form-hint">
+          Optional. Overrides the User-Agent only for this custom model.
+        </div>
+      </div>
+
       <!-- Maximum generated response tokens for custom models. -->
       <div class="form-group">
         <label for="custom-model-max-output-tokens">{{ t("maxOutputTokens") }}</label>
@@ -413,6 +428,7 @@ watch(
         max_tokens: m.max_tokens,
         tags: m.tags,
         reasoning_effort: m.reasoning_effort || "",
+        user_agent: m.user_agent || "",
         reasoning_replay: m.reasoning_replay || "auto",
         reasoning_support: m.reasoning_support || "auto",
         reasoning_map: parseReasoningMap(m.reasoning_map),
@@ -461,6 +477,7 @@ async function handleTest() {
       model_name: form.model_name,
       max_tokens: form.max_tokens,
       reasoning_effort: form.reasoning_effort,
+      user_agent: form.user_agent,
       reasoning_replay: form.reasoning_replay,
       reasoning_support: form.reasoning_support,
       reasoning_map: serializeReasoningMap(),
@@ -492,6 +509,7 @@ async function handleSave() {
       max_tokens: form.max_tokens,
       tags: form.tags,
       reasoning_effort: form.reasoning_effort,
+      user_agent: form.user_agent,
       reasoning_replay: form.reasoning_replay,
       reasoning_support: form.reasoning_support,
       reasoning_map: serializeReasoningMap(),
