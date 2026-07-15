@@ -63,6 +63,7 @@ type Model struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 	ReasoningEffort string    `json:"reasoning_effort"`
 	ImageSupport    string    `json:"image_support"`
+	UserAgent       string    `json:"user_agent"`
 }
 
 type NotificationChannel struct {

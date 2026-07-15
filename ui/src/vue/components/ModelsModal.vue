@@ -130,6 +130,21 @@
           />
         </div>
 
+        <!-- User-Agent override -->
+        <div class="form-group">
+          <label>User-Agent</label>
+          <input
+            type="text"
+            v-model="form.user_agent"
+            placeholder="Shelley default (for example: codex_cli_rs/0.144.0)"
+            class="form-input"
+            autocomplete="off"
+          />
+          <div class="form-hint">
+            Optional. Overrides the User-Agent only for this custom model.
+          </div>
+        </div>
+
         <!-- Max Tokens -->
         <div class="form-group">
           <label>{{ t("maxContextTokens") }}</label>
@@ -461,6 +476,7 @@ interface FormData {
   max_tokens: number;
   tags: string;
   reasoning_effort: string;
+  user_agent: string;
   image_support: "auto" | "yes" | "no";
 }
 
@@ -474,6 +490,7 @@ const emptyForm: FormData = {
   max_tokens: 200000,
   tags: "",
   reasoning_effort: "",
+  user_agent: "",
   image_support: "auto",
 };
 
@@ -582,6 +599,7 @@ async function handleTest() {
       api_key: form.api_key,
       model_name: form.model_name,
       reasoning_effort: form.reasoning_effort,
+      user_agent: form.user_agent,
     };
     testResult.value = await customModelsApi.testCustomModel(request);
   } catch (err) {
@@ -610,6 +628,7 @@ async function handleSave() {
       max_tokens: form.max_tokens,
       tags: form.tags,
       reasoning_effort: form.reasoning_effort,
+      user_agent: form.user_agent,
       image_support: form.image_support,
     };
     if (editingModelId.value) {
@@ -640,6 +659,7 @@ function handleEdit(model: CustomModel) {
     max_tokens: model.max_tokens,
     tags: model.tags,
     reasoning_effort: model.reasoning_effort || "",
+    user_agent: model.user_agent || "",
     image_support: model.image_support ?? "auto",
   });
   showForm.value = true;

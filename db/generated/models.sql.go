@@ -10,9 +10,9 @@ import (
 )
 
 const createModel = `-- name: CreateModel :one
-INSERT INTO models (model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, reasoning_effort, image_support)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support
+INSERT INTO models (model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, reasoning_effort, image_support, user_agent)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent
 `
 
 type CreateModelParams struct {
@@ -26,6 +26,7 @@ type CreateModelParams struct {
 	Tags            string `json:"tags"`
 	ReasoningEffort string `json:"reasoning_effort"`
 	ImageSupport    string `json:"image_support"`
+	UserAgent       string `json:"user_agent"`
 }
 
 func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Model, error) {
@@ -40,6 +41,7 @@ func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Model
 		arg.Tags,
 		arg.ReasoningEffort,
 		arg.ImageSupport,
+		arg.UserAgent,
 	)
 	var i Model
 	err := row.Scan(
@@ -55,6 +57,7 @@ func (q *Queries) CreateModel(ctx context.Context, arg CreateModelParams) (Model
 		&i.UpdatedAt,
 		&i.ReasoningEffort,
 		&i.ImageSupport,
+		&i.UserAgent,
 	)
 	return i, err
 }
@@ -69,7 +72,7 @@ func (q *Queries) DeleteModel(ctx context.Context, modelID string) error {
 }
 
 const getModel = `-- name: GetModel :one
-SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support FROM models WHERE model_id = ?
+SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent FROM models WHERE model_id = ?
 `
 
 func (q *Queries) GetModel(ctx context.Context, modelID string) (Model, error) {
@@ -88,12 +91,13 @@ func (q *Queries) GetModel(ctx context.Context, modelID string) (Model, error) {
 		&i.UpdatedAt,
 		&i.ReasoningEffort,
 		&i.ImageSupport,
+		&i.UserAgent,
 	)
 	return i, err
 }
 
 const getModels = `-- name: GetModels :many
-SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support FROM models ORDER BY created_at ASC
+SELECT model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent FROM models ORDER BY created_at ASC
 `
 
 func (q *Queries) GetModels(ctx context.Context) ([]Model, error) {
@@ -118,6 +122,7 @@ func (q *Queries) GetModels(ctx context.Context) ([]Model, error) {
 			&i.UpdatedAt,
 			&i.ReasoningEffort,
 			&i.ImageSupport,
+			&i.UserAgent,
 		); err != nil {
 			return nil, err
 		}
@@ -143,9 +148,10 @@ SET display_name = ?,
     tags = ?,
     reasoning_effort = ?,
     image_support = ?,
+    user_agent = ?,
     updated_at = CURRENT_TIMESTAMP
 WHERE model_id = ?
-RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support
+RETURNING model_id, display_name, provider_type, endpoint, api_key, model_name, max_tokens, tags, created_at, updated_at, reasoning_effort, image_support, user_agent
 `
 
 type UpdateModelParams struct {
@@ -158,6 +164,7 @@ type UpdateModelParams struct {
 	Tags            string `json:"tags"`
 	ReasoningEffort string `json:"reasoning_effort"`
 	ImageSupport    string `json:"image_support"`
+	UserAgent       string `json:"user_agent"`
 	ModelID         string `json:"model_id"`
 }
 
@@ -172,6 +179,7 @@ func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (Model
 		arg.Tags,
 		arg.ReasoningEffort,
 		arg.ImageSupport,
+		arg.UserAgent,
 		arg.ModelID,
 	)
 	var i Model
@@ -188,6 +196,7 @@ func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) (Model
 		&i.UpdatedAt,
 		&i.ReasoningEffort,
 		&i.ImageSupport,
+		&i.UserAgent,
 	)
 	return i, err
 }

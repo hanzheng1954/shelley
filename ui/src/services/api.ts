@@ -706,6 +706,7 @@ export interface CustomModel {
   max_tokens: number;
   tags: string; // Comma-separated tags (e.g., "slug" for slug generation)
   reasoning_effort: string; // Free-form reasoning.effort for OpenAI Responses API
+  user_agent: string; // Optional outbound User-Agent override
   image_support: "auto" | "yes" | "no";
   supports_images: boolean; // Resolved boolean that image_support evaluates to
 }
@@ -719,6 +720,7 @@ export interface CreateCustomModelRequest {
   max_tokens: number;
   tags: string; // Comma-separated tags
   reasoning_effort: string; // Free-form reasoning.effort for OpenAI Responses API
+  user_agent: string; // Optional outbound User-Agent override
   image_support: "auto" | "yes" | "no";
 }
 
@@ -729,6 +731,7 @@ export interface TestCustomModelRequest {
   api_key: string;
   model_name: string;
   reasoning_effort?: string;
+  user_agent?: string;
 }
 
 class CustomModelsApi {

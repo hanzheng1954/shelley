@@ -79,6 +79,7 @@ interface FormData {
   max_tokens: number;
   tags: string; // Comma-separated tags
   reasoning_effort: string; // Free-form reasoning.effort for OpenAI Responses API
+  user_agent: string; // Optional outbound User-Agent override
   image_support: "auto" | "yes" | "no";
 }
 
@@ -92,6 +93,7 @@ const emptyForm: FormData = {
   max_tokens: 200000,
   tags: "",
   reasoning_effort: "",
+  user_agent: "",
   image_support: "auto",
 };
 
@@ -216,6 +218,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
         api_key: form.api_key,
         model_name: form.model_name,
         reasoning_effort: form.reasoning_effort,
+        user_agent: form.user_agent,
       };
       const result = await customModelsApi.testCustomModel(request);
       setTestResult(result);
@@ -246,6 +249,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
         max_tokens: form.max_tokens,
         tags: form.tags,
         reasoning_effort: form.reasoning_effort,
+        user_agent: form.user_agent,
         image_support: form.image_support,
       };
 
@@ -278,6 +282,7 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
       max_tokens: model.max_tokens,
       tags: model.tags,
       reasoning_effort: model.reasoning_effort || "",
+      user_agent: model.user_agent || "",
       image_support: model.image_support ?? "auto",
     });
     setShowForm(true);
@@ -490,6 +495,22 @@ function ModelsModal({ isOpen, onClose, onModelsChanged }: ModelsModalProps) {
                 className="form-input"
                 autoComplete="off"
               />
+            </div>
+
+            {/* User-Agent override */}
+            <div className="form-group">
+              <label>User-Agent</label>
+              <input
+                type="text"
+                value={form.user_agent}
+                onChange={(e) => setForm((prev) => ({ ...prev, user_agent: e.target.value }))}
+                placeholder="Shelley default (for example: codex_cli_rs/0.144.0)"
+                className="form-input"
+                autoComplete="off"
+              />
+              <div className="form-hint">
+                Optional. Overrides the User-Agent only for this custom model.
+              </div>
             </div>
 
             {/* Max Tokens */}

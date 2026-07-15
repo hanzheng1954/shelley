@@ -12,6 +12,7 @@ import (
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/ant"
 	"shelley.exe.dev/llm/gem"
+	"shelley.exe.dev/llm/llmhttp"
 	"shelley.exe.dev/llm/oai"
 	"shelley.exe.dev/models"
 )
@@ -27,6 +28,7 @@ type ModelAPI struct {
 	MaxTokens       int64  `json:"max_tokens"`
 	Tags            string `json:"tags"`             // Comma-separated tags (e.g., "slug" for slug generation)
 	ReasoningEffort string `json:"reasoning_effort"` // Free-form reasoning.effort for OpenAI Responses API; empty = default
+	UserAgent       string `json:"user_agent"`       // Optional outbound User-Agent override
 	// ImageSupport is one of "auto", "yes", or "no". "auto" is resolved
 	// automatically from the model's endpoint and name.
 	ImageSupport string `json:"image_support"`
@@ -45,20 +47,22 @@ type CreateModelRequest struct {
 	MaxTokens       int64  `json:"max_tokens"`
 	Tags            string `json:"tags"`             // Comma-separated tags
 	ReasoningEffort string `json:"reasoning_effort"` // Free-form reasoning.effort for OpenAI Responses API
+	UserAgent       string `json:"user_agent"`       // Optional outbound User-Agent override
 	ImageSupport    string `json:"image_support"`    // "auto"|"yes"|"no"; empty = "auto"
 }
 
 // UpdateModelRequest is the request body for updating a model.
 type UpdateModelRequest struct {
-	DisplayName     string `json:"display_name"`
-	ProviderType    string `json:"provider_type"`
-	Endpoint        string `json:"endpoint"`
-	APIKey          string `json:"api_key"` // Empty string means keep existing
-	ModelName       string `json:"model_name"`
-	MaxTokens       int64  `json:"max_tokens"`
-	Tags            string `json:"tags"`             // Comma-separated tags
-	ReasoningEffort string `json:"reasoning_effort"` // Free-form reasoning.effort for OpenAI Responses API
-	ImageSupport    string `json:"image_support"`    // "auto"|"yes"|"no"; empty preserves existing
+	DisplayName     string  `json:"display_name"`
+	ProviderType    string  `json:"provider_type"`
+	Endpoint        string  `json:"endpoint"`
+	APIKey          string  `json:"api_key"` // Empty string means keep existing
+	ModelName       string  `json:"model_name"`
+	MaxTokens       int64   `json:"max_tokens"`
+	Tags            string  `json:"tags"`             // Comma-separated tags
+	ReasoningEffort string  `json:"reasoning_effort"` // Free-form reasoning.effort for OpenAI Responses API
+	UserAgent       *string `json:"user_agent"`       // Nil preserves existing; empty clears override
+	ImageSupport    string  `json:"image_support"`    // "auto"|"yes"|"no"; empty preserves existing
 }
 
 // validImageSupport returns the canonical value or an error.
@@ -81,6 +85,7 @@ type TestModelRequest struct {
 	APIKey          string `json:"api_key"`
 	ModelName       string `json:"model_name"`
 	ReasoningEffort string `json:"reasoning_effort"`
+	UserAgent       string `json:"user_agent"`
 }
 
 func toModelAPI(m generated.Model) ModelAPI {
@@ -94,6 +99,7 @@ func toModelAPI(m generated.Model) ModelAPI {
 		MaxTokens:       m.MaxTokens,
 		Tags:            m.Tags,
 		ReasoningEffort: m.ReasoningEffort,
+		UserAgent:       m.UserAgent,
 		ImageSupport:    m.ImageSupport,
 		SupportsImages:  models.ResolveSupportsImages(m.Endpoint, m.ModelName, m.ImageSupport),
 	}
@@ -174,6 +180,7 @@ func (s *Server) handleCreateModel(w http.ResponseWriter, r *http.Request) {
 		Tags:            req.Tags,
 		ReasoningEffort: req.ReasoningEffort,
 		ImageSupport:    imageSupport,
+		UserAgent:       strings.TrimSpace(req.UserAgent),
 	})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create model: %v", err), http.StatusInternalServerError)
@@ -274,6 +281,11 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 		imageSupport = v
 	}
 
+	userAgent := existing.UserAgent
+	if req.UserAgent != nil {
+		userAgent = strings.TrimSpace(*req.UserAgent)
+	}
+
 	model, err := s.db.UpdateModel(r.Context(), generated.UpdateModelParams{
 		DisplayName:     req.DisplayName,
 		ProviderType:    req.ProviderType,
@@ -284,6 +296,7 @@ func (s *Server) handleUpdateModel(w http.ResponseWriter, r *http.Request, model
 		Tags:            req.Tags,
 		ReasoningEffort: req.ReasoningEffort,
 		ImageSupport:    imageSupport,
+		UserAgent:       userAgent,
 		ModelID:         modelID,
 	})
 	if err != nil {
@@ -360,6 +373,7 @@ func (s *Server) handleDuplicateModel(w http.ResponseWriter, r *http.Request, mo
 		Tags:            "", // Don't copy tags
 		ReasoningEffort: source.ReasoningEffort,
 		ImageSupport:    source.ImageSupport,
+		UserAgent:       source.UserAgent,
 	})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to duplicate model: %v", err), http.StatusInternalServerError)
@@ -388,20 +402,28 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If model_id is provided and api_key is empty, look up the stored key
-	if req.ModelID != "" && req.APIKey == "" {
+	// If model_id is provided, fill fields that may rely on stored secrets or settings.
+	if req.ModelID != "" && (req.APIKey == "" || req.UserAgent == "") {
 		model, err := s.db.GetModel(r.Context(), req.ModelID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Model not found: %v", err), http.StatusNotFound)
 			return
 		}
-		req.APIKey = model.ApiKey
+		if req.APIKey == "" {
+			req.APIKey = model.ApiKey
+		}
+		if req.UserAgent == "" {
+			req.UserAgent = model.UserAgent
+		}
 	}
 
 	if req.ProviderType == "" || req.Endpoint == "" || req.APIKey == "" || req.ModelName == "" {
 		http.Error(w, "provider_type, endpoint, api_key, and model_name are required", http.StatusBadRequest)
 		return
 	}
+
+	// Test with the same shared transport used at runtime.
+	testClient := llmhttp.NewClient(nil)
 
 	// Create the appropriate service based on provider type
 	var service llm.Service
@@ -412,6 +434,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			URL:           req.Endpoint,
 			Model:         req.ModelName,
 			ThinkingLevel: llm.ThinkingLevelMedium,
+			HTTPC:         testClient,
 		}
 	case "openai":
 		service = &oai.Service{
@@ -426,6 +449,8 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 				UseSimplifiedPatch: false,
 				SupportsImages:     true,
 			},
+			HTTPC:        testClient,
+			ProviderName: "openai",
 		}
 	case "gemini":
 		service = &gem.Service{
@@ -433,6 +458,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			URL:             req.Endpoint,
 			Model:           req.ModelName,
 			ReasoningEffort: req.ReasoningEffort,
+			HTTPC:           testClient,
 		}
 	case "openai-responses":
 		service = &oai.ResponsesService{
@@ -450,6 +476,7 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 			// medium is the default when no explicit override is given.
 			ThinkingLevel:   llm.ThinkingLevelMedium,
 			ReasoningEffort: req.ReasoningEffort,
+			HTTPC:           testClient,
 		}
 	default:
 		http.Error(w, "Invalid provider_type", http.StatusBadRequest)
@@ -459,6 +486,9 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 	// Send a simple test request
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
+	if req.UserAgent != "" {
+		ctx = llmhttp.WithUserAgent(ctx, strings.TrimSpace(req.UserAgent))
+	}
 
 	request := &llm.Request{
 		Messages: []llm.Message{
