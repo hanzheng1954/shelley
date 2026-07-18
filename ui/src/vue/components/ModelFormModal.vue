@@ -111,11 +111,11 @@
       <!-- User-Agent override -->
       <div class="form-group">
         <label>User-Agent</label>
-        <input
+        <InputText
           v-model="form.user_agent"
-          type="text"
           placeholder="Shelley default (for example: codex_cli_rs/0.144.0)"
-          class="form-input"
+          fluid
+          :dt="inputFieldDt"
           autocomplete="off"
         />
         <div class="form-hint">
