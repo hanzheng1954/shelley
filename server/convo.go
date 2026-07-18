@@ -2067,11 +2067,7 @@ func (cm *ConversationManager) recreateBtwReaderSystemPrompt(ctx context.Context
 }
 
 func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	var opts []SystemPromptOption
-	if cm.userEmail != "" {
-		opts = append(opts, WithUserEmail(cm.userEmail))
-	}
-	systemPrompt, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx), opts...)
+	systemPrompt, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
