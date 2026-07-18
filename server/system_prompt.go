@@ -41,7 +41,6 @@ type SystemPromptData struct {
 	DefaultPort      int    // For exe.dev, the auto-routed HTTP port, 0 if unknown
 	SkillsXML        string // XML block for available skills
 	Skills           []skills.Skill
-	UserEmail        string          // The exe.dev auth email of the user, if known
 	MCPServers       []MCPServerInfo // Registered MCP servers, for the mcp skill
 	// ExeDevIntegrations are the attached exe-dev integrations.
 	ExeDevIntegrations []ExeDevIntegrationInfo
@@ -59,7 +58,6 @@ type SystemPromptVariable struct {
 // systemPromptVariables are the fields a system prompt template can use.
 var systemPromptVariables = []SystemPromptVariable{
 	{".WorkingDirectory", "The conversation's working directory."},
-	{".UserEmail", "The user's exe.dev email; empty if unknown."},
 	{".GitInfo.Root", "The git repository root. .GitInfo is nil outside a repository."},
 	{".IsExeDev", "Whether Shelley runs on an exe.dev VM."},
 	{".Hostname", "On exe.dev, the VM's public hostname (vmname.exe.xyz)."},
@@ -92,7 +90,6 @@ func validateSystemPromptTemplate(tmpl string) *TemplateProblem {
 		DefaultPort:        8000,
 		SkillsXML:          "<available_skills></available_skills>",
 		Skills:             []skills.Skill{{Name: "skill", Description: "A skill."}},
-		UserEmail:          "user@example.com",
 		MCPServers:         []MCPServerInfo{{Name: "server", Description: "An MCP server."}},
 		ExeDevIntegrations: []ExeDevIntegrationInfo{{Name: "exe-dev", URL: "https://exe-dev.int.exe.xyz"}},
 		template:           tmpl,
@@ -281,13 +278,6 @@ func (c *CodebaseInfo) SubdirGuidanceSummary() string {
 
 // SystemPromptOption configures optional fields on the system prompt.
 type SystemPromptOption func(*SystemPromptData)
-
-// WithUserEmail sets the user's email in the system prompt.
-func WithUserEmail(email string) SystemPromptOption {
-	return func(d *SystemPromptData) {
-		d.UserEmail = email
-	}
-}
 
 // WithTemplate renders tmpl instead of the built-in template; "" keeps the
 // built-in one.

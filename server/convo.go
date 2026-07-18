@@ -1782,12 +1782,8 @@ func (cm *ConversationManager) renderSystemPrompt(ctx context.Context, opts db.C
 	if cm.role != roleTopLevel {
 		return cm.renderSubagentSystemPrompt(ctx, opts)
 	}
-	var promptOpts []SystemPromptOption
-	if cm.userEmail != "" {
-		promptOpts = append(promptOpts, WithUserEmail(cm.userEmail))
-	}
 	servers, exeDev := cm.promptIntegrations(ctx)
-	promptOpts = append(promptOpts, WithMCPServers(servers), WithExeDevIntegrations(exeDev), WithTemplate(opts.SystemPrompt))
+	promptOpts := []SystemPromptOption{WithMCPServers(servers), WithExeDevIntegrations(exeDev), WithTemplate(opts.SystemPrompt)}
 	text, promptSkills, err := generateSystemPromptWithIntegrationSkills(cm.cwd, cm.integrationSkills.Skills(ctx), promptOpts...)
 	if err != nil {
 		return renderedSystemPrompt{}, fmt.Errorf("failed to generate system prompt: %w", err)
