@@ -38,7 +38,6 @@ type SystemPromptData struct {
 	Hostname         string // For exe.dev, the public hostname (e.g., "vmname.exe.xyz")
 	DefaultPort      int    // For exe.dev, the auto-routed HTTP port, 0 if unknown
 	SkillsXML        string // XML block for available skills
-	UserEmail        string // The exe.dev auth email of the user, if known
 }
 
 // DBPath is the path to the shelley database, set at startup
@@ -78,13 +77,6 @@ func (c *CodebaseInfo) SubdirGuidanceSummary() string {
 
 // SystemPromptOption configures optional fields on the system prompt.
 type SystemPromptOption func(*SystemPromptData)
-
-// WithUserEmail sets the user's email in the system prompt.
-func WithUserEmail(email string) SystemPromptOption {
-	return func(d *SystemPromptData) {
-		d.UserEmail = email
-	}
-}
 
 // GenerateSystemPrompt generates the system prompt using the embedded template.
 // If workingDir is empty, it uses the current working directory.

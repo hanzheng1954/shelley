@@ -1663,11 +1663,7 @@ func hasNonSystemMessages(messages []generated.Message) bool {
 }
 
 func (cm *ConversationManager) createSystemPrompt(ctx context.Context) (*generated.Message, error) {
-	var opts []SystemPromptOption
-	if cm.userEmail != "" {
-		opts = append(opts, WithUserEmail(cm.userEmail))
-	}
-	systemPrompt, err := GenerateSystemPrompt(cm.cwd, opts...)
+	systemPrompt, err := GenerateSystemPrompt(cm.cwd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate system prompt: %w", err)
 	}
