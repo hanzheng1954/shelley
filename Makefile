@@ -39,9 +39,15 @@ build-custom: exe-scroll ui templates
 		echo "warning: building outside $$CANON; the version dialog's rebase-upgrade flow assumes that checkout" >&2; \
 	fi; \
 	git fetch --tags origin main; \
-	BASE=$$(git merge-base HEAD origin/main); \
+	UPSTREAM_REMOTE=origin; \
+	if git remote get-url upstream >/dev/null 2>&1; then \
+		git fetch --tags upstream main; \
+		UPSTREAM_REMOTE=upstream; \
+	fi; \
+	UPSTREAM_MAIN=$${UPSTREAM_REMOTE}/main; \
+	BASE=$$(git merge-base HEAD "$$UPSTREAM_MAIN"); \
 	TAG=$$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$$BASE") || { \
-		echo "error: no release tag reachable from the merge-base with origin/main; is this a shallow clone? (need a full clone with tags)" >&2; \
+		echo "error: no release tag reachable from the merge-base with $$UPSTREAM_MAIN; is this a shallow clone? (need a full clone with tags)" >&2; \
 		exit 1; \
 	}; \
 	SHA=$$(git rev-parse --short HEAD); \
