@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/llmhttp"
 )
@@ -37,6 +39,10 @@ func TestApplyCodexClientCompatibility(t *testing.T) {
 	}
 	if req.PromptCacheKey == "" || req.ClientMetadata["session_id"] == "" {
 		t.Fatal("missing Codex request metadata")
+	}
+	sessionID, err := uuid.Parse(req.ClientMetadata["session_id"])
+	if err != nil || sessionID.Version() != 7 {
+		t.Fatalf("Codex session ID = %q; want UUIDv7", req.ClientMetadata["session_id"])
 	}
 	if len(req.Tools) != 1 || req.Tools[0].Type != "function" {
 		t.Fatalf("Codex Lite tools = %#v; web_search should be removed", req.Tools)
