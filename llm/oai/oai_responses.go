@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"shelley.exe.dev/llm"
 	"shelley.exe.dev/llm/llmhttp"
 )
@@ -60,6 +62,7 @@ type responsesRequest struct {
 	Include           []string             `json:"include,omitempty"`
 	PromptCacheKey    string               `json:"prompt_cache_key,omitempty"`
 	Text              *responsesText       `json:"text,omitempty"`
+	ClientMetadata    map[string]string    `json:"client_metadata,omitempty"`
 }
 
 type responsesReasoning struct {
@@ -69,6 +72,64 @@ type responsesReasoning struct {
 
 type responsesText struct {
 	Verbosity string `json:"verbosity,omitempty"`
+}
+
+type codexTurnMetadata struct {
+	InstallationID      string `json:"installation_id"`
+	SessionID           string `json:"session_id"`
+	ThreadID            string `json:"thread_id"`
+	TurnID              string `json:"turn_id"`
+	WindowID            string `json:"window_id"`
+	RequestKind         string `json:"request_kind"`
+	ThreadSource        string `json:"thread_source"`
+	Sandbox             string `json:"sandbox"`
+	TurnStartedAtUnixMS int64  `json:"turn_started_at_unix_ms"`
+}
+
+var codexInstallationID = uuid.NewString()
+
+// applyCodexClientCompatibility adds the metadata required by providers that
+// restrict an account to official Codex clients. A codex_* User-Agent opts in.
+func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) http.Header {
+	userAgent := llmhttp.UserAgentFromContext(ctx)
+	if !strings.HasPrefix(userAgent, "codex_") {
+		return nil
+	}
+
+	originator := strings.SplitN(userAgent, "/", 2)[0]
+	sessionID := uuid.NewString()
+	threadID := sessionID
+	turnID := uuid.NewString()
+	windowID := sessionID + ":0"
+	metadata := codexTurnMetadata{
+		InstallationID: codexInstallationID, SessionID: sessionID, ThreadID: threadID,
+		TurnID: turnID, WindowID: windowID, RequestKind: "turn", ThreadSource: "user",
+		Sandbox: "seccomp", TurnStartedAtUnixMS: time.Now().UnixMilli(),
+	}
+	metadataJSON, _ := json.Marshal(metadata)
+	metadataString := string(metadataJSON)
+
+	req.PromptCacheKey = sessionID
+	req.ClientMetadata = map[string]string{
+		"x-codex-installation-id": codexInstallationID,
+		"x-codex-turn-metadata":   metadataString,
+		"turn_id":                 turnID,
+		"session_id":              sessionID,
+		"thread_id":               threadID,
+		"x-codex-window-id":       windowID,
+	}
+
+	headers := make(http.Header)
+	headers.Set("Accept", "text/event-stream")
+	headers.Set("originator", originator)
+	headers.Set("session-id", sessionID)
+	headers.Set("thread-id", threadID)
+	headers.Set("x-client-request-id", sessionID)
+	headers.Set("x-openai-internal-codex-responses-lite", "true")
+	headers.Set("x-codex-beta-features", "remote_compaction_v2")
+	headers.Set("x-codex-window-id", windowID)
+	headers.Set("x-codex-turn-metadata", metadataString)
+	return headers
 }
 
 type responsesInputItem struct {
@@ -647,6 +708,10 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 		req.ToolChoice = fromLLMToolChoice(ir.ToolChoice)
 	}
 
+	// Official Codex-only providers require per-turn metadata in both the body
+	// and headers; a User-Agent override alone is insufficient.
+	codexHeaders := applyCodexClientCompatibility(ctx, &req)
+
 	// Marshal the request
 	reqJSON, err := json.Marshal(req)
 	if err != nil {
@@ -721,6 +786,11 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 
 		httpReq.Header.Set("Content-Type", "application/json")
 		httpReq.Header.Set("Authorization", "Bearer "+s.APIKey)
+		for name, values := range codexHeaders {
+			for _, value := range values {
+				httpReq.Header.Add(name, value)
+			}
+		}
 		if s.Org != "" {
 			httpReq.Header.Set("OpenAI-Organization", s.Org)
 		}
