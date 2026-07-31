@@ -22,6 +22,25 @@ func TestResponsesServiceBasic(t *testing.T) {
 	var _ llm.Service = (*ResponsesService)(nil)
 }
 
+func TestApplyCodexClientCompatibility(t *testing.T) {
+	ctx := llmhttp.WithUserAgent(context.Background(), "codex_cli_rs/0.145.1")
+	req := responsesRequest{}
+	headers := applyCodexClientCompatibility(ctx, &req)
+
+	if got := headers.Get("originator"); got != "codex_cli_rs" {
+		t.Fatalf("originator = %q", got)
+	}
+	if headers.Get("x-codex-turn-metadata") == "" || headers.Get("session-id") == "" {
+		t.Fatal("missing Codex turn metadata headers")
+	}
+	if req.PromptCacheKey == "" || req.ClientMetadata["session_id"] == "" {
+		t.Fatal("missing Codex request metadata")
+	}
+	if req.ClientMetadata["x-codex-turn-metadata"] != headers.Get("x-codex-turn-metadata") {
+		t.Fatal("body and header turn metadata differ")
+	}
+}
+
 func TestFromLLMMessageResponses(t *testing.T) {
 	tests := []struct {
 		name     string
