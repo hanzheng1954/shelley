@@ -55,7 +55,7 @@ type responsesRequest struct {
 	Input             []responsesInputItem `json:"input"`
 	Tools             []responsesTool      `json:"tools,omitempty"`
 	ToolChoice        any                  `json:"tool_choice,omitempty"`
-	ParallelToolCalls bool                 `json:"parallel_tool_calls,omitempty"`
+	ParallelToolCalls *bool                `json:"parallel_tool_calls,omitempty"`
 	MaxOutputTokens   int                  `json:"max_output_tokens,omitempty"`
 	Reasoning         *responsesReasoning  `json:"reasoning,omitempty"`
 	Include           []string             `json:"include,omitempty"`
@@ -87,6 +87,8 @@ type codexTurnMetadata struct {
 }
 
 var codexInstallationID = uuid.NewString()
+
+func boolPointer(value bool) *bool { return &value }
 
 func newCodexTurnID() string {
 	id, err := uuid.NewV7()
@@ -120,7 +122,7 @@ func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) h
 	req.PromptCacheKey = sessionID
 	// Match Codex's Responses Lite request shape. The Lite route is stricter
 	// than the general Responses API and otherwise returns an opaque 502.
-	req.ParallelToolCalls = false
+	req.ParallelToolCalls = boolPointer(false)
 	req.MaxOutputTokens = 0
 	if req.Reasoning == nil {
 		req.Reasoning = &responsesReasoning{Effort: "low"}
@@ -664,7 +666,7 @@ func (s *ResponsesService) Do(ctx context.Context, ir *llm.Request) (*llm.Respon
 	if openAIResponses {
 		req.Include = []string{"reasoning.encrypted_content"}
 		req.ToolChoice = "auto"
-		req.ParallelToolCalls = true
+		req.ParallelToolCalls = boolPointer(true)
 		req.PromptCacheKey = llmhttp.ConversationIDFromContext(ctx)
 		if model.TextVerbosity != "" {
 			req.Text = &responsesText{Verbosity: model.TextVerbosity}
