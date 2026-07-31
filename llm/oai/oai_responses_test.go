@@ -48,8 +48,12 @@ func TestApplyCodexClientCompatibility(t *testing.T) {
 	if len(req.Tools) != 1 || req.Tools[0].Type != "function" {
 		t.Fatalf("Codex Lite tools = %#v; web_search should be removed", req.Tools)
 	}
-	if req.ParallelToolCalls || req.MaxOutputTokens != 0 {
-		t.Fatal("Codex Lite request must disable parallel tools and omit max_output_tokens")
+	if req.ParallelToolCalls == nil || *req.ParallelToolCalls || req.MaxOutputTokens != 0 {
+		t.Fatal("Codex Lite request must explicitly disable parallel tools and omit max_output_tokens")
+	}
+	encoded, err := json.Marshal(req)
+	if err != nil || !strings.Contains(string(encoded), `"parallel_tool_calls":false`) {
+		t.Fatalf("Codex Lite JSON must explicitly send parallel_tool_calls=false: %s", encoded)
 	}
 	if req.Reasoning == nil || req.Reasoning.Context != "all_turns" || req.Reasoning.Summary != "" {
 		t.Fatalf("Codex Lite reasoning = %#v", req.Reasoning)
