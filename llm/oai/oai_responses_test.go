@@ -48,6 +48,15 @@ func TestApplyCodexClientCompatibility(t *testing.T) {
 	if len(req.Tools) != 1 || req.Tools[0].Type != "function" {
 		t.Fatalf("Codex Lite tools = %#v; web_search should be removed", req.Tools)
 	}
+	if req.ParallelToolCalls || req.MaxOutputTokens != 0 {
+		t.Fatal("Codex Lite request must disable parallel tools and omit max_output_tokens")
+	}
+	if req.Reasoning == nil || req.Reasoning.Context != "all_turns" || req.Reasoning.Summary != "" {
+		t.Fatalf("Codex Lite reasoning = %#v", req.Reasoning)
+	}
+	if req.Text == nil || req.Text.Verbosity != "low" {
+		t.Fatalf("Codex Lite text = %#v", req.Text)
+	}
 	if req.ClientMetadata["x-codex-turn-metadata"] != headers.Get("x-codex-turn-metadata") {
 		t.Fatal("body and header turn metadata differ")
 	}
