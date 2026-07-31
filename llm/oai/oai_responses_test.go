@@ -24,7 +24,10 @@ func TestResponsesServiceBasic(t *testing.T) {
 
 func TestApplyCodexClientCompatibility(t *testing.T) {
 	ctx := llmhttp.WithUserAgent(context.Background(), "codex_cli_rs/0.145.1")
-	req := responsesRequest{}
+	req := responsesRequest{Tools: []responsesTool{
+		{Type: "function", Name: "bash"},
+		{Type: "web_search"},
+	}}
 	headers := applyCodexClientCompatibility(ctx, &req)
 
 	if got := headers.Get("originator"); got != "codex_cli_rs" {
@@ -35,6 +38,9 @@ func TestApplyCodexClientCompatibility(t *testing.T) {
 	}
 	if req.PromptCacheKey == "" || req.ClientMetadata["session_id"] == "" {
 		t.Fatal("missing Codex request metadata")
+	}
+	if len(req.Tools) != 1 || req.Tools[0].Type != "function" {
+		t.Fatalf("Codex Lite tools = %#v; web_search should be removed", req.Tools)
 	}
 	if req.ClientMetadata["x-codex-turn-metadata"] != headers.Get("x-codex-turn-metadata") {
 		t.Fatal("body and header turn metadata differ")

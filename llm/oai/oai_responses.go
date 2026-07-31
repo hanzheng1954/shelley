@@ -110,6 +110,16 @@ func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) h
 	metadataString := string(metadataJSON)
 
 	req.PromptCacheKey = sessionID
+	// The official Codex Lite route rejects provider-hosted web_search tools.
+	// Shelley still exposes its normal web tool, so omit only this unsupported
+	// top-level Responses API tool for Codex-compatible requests.
+	tools := req.Tools[:0]
+	for _, tool := range req.Tools {
+		if tool.Type != "web_search" && tool.Type != "web_search_preview" {
+			tools = append(tools, tool)
+		}
+	}
+	req.Tools = tools
 	req.ClientMetadata = map[string]string{
 		"x-codex-installation-id": codexInstallationID,
 		"x-codex-turn-metadata":   metadataString,
