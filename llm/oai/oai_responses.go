@@ -88,6 +88,14 @@ type codexTurnMetadata struct {
 
 var codexInstallationID = uuid.NewString()
 
+func newCodexTurnID() string {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return uuid.NewString()
+	}
+	return id.String()
+}
+
 // applyCodexClientCompatibility adds the metadata required by providers that
 // restrict an account to official Codex clients. A codex_* User-Agent opts in.
 func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) http.Header {
@@ -97,9 +105,9 @@ func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) h
 	}
 
 	originator := strings.SplitN(userAgent, "/", 2)[0]
-	sessionID := uuid.NewString()
+	sessionID := newCodexTurnID()
 	threadID := sessionID
-	turnID := uuid.NewString()
+	turnID := newCodexTurnID()
 	windowID := sessionID + ":0"
 	metadata := codexTurnMetadata{
 		InstallationID: codexInstallationID, SessionID: sessionID, ThreadID: threadID,
