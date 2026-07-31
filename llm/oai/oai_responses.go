@@ -67,6 +67,7 @@ type responsesRequest struct {
 type responsesReasoning struct {
 	Effort  string `json:"effort,omitempty"`  // "low", "medium", "high"
 	Summary string `json:"summary,omitempty"` // "auto": include reasoning summaries in the output
+	Context string `json:"context,omitempty"` // Codex Lite uses "all_turns"
 }
 
 type responsesText struct {
@@ -117,6 +118,18 @@ func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) h
 	metadataString := string(metadataJSON)
 
 	req.PromptCacheKey = sessionID
+	// Match Codex's Responses Lite request shape. The Lite route is stricter
+	// than the general Responses API and otherwise returns an opaque 502.
+	req.ParallelToolCalls = false
+	req.MaxOutputTokens = 0
+	if req.Reasoning == nil {
+		req.Reasoning = &responsesReasoning{Effort: "low"}
+	}
+	req.Reasoning.Summary = ""
+	req.Reasoning.Context = "all_turns"
+	if req.Text == nil {
+		req.Text = &responsesText{Verbosity: "low"}
+	}
 	// The official Codex Lite route rejects provider-hosted web_search tools.
 	// Shelley still exposes its normal web tool, so omit only this unsupported
 	// top-level Responses API tool for Codex-compatible requests.
