@@ -22,6 +22,9 @@ var ToolRegistry = []ToolInfo{
 	{Name: "output_iframe", Summary: "Show HTML/visualizations to the user.", DefaultOn: true, SourcePath: "claudetool/output_iframe.go"},
 	{Name: "subagent", Summary: "Spawn a subagent conversation.", DefaultOn: true, SourcePath: "claudetool/subagent.go"},
 	{Name: "llm_one_shot", Summary: "One-shot prompt to another LLM.", DefaultOn: true, SourcePath: "claudetool/llm_one_shot.go"},
+	{Name: "memory", Summary: "Search and save durable project experience.", DefaultOn: true, SourcePath: "claudetool/experience.go"},
+	{Name: "task_journal", Summary: "Save and restore task checkpoints.", DefaultOn: true, SourcePath: "claudetool/experience.go"},
+	{Name: "dream", Summary: "Consolidate verified work into reusable lessons.", DefaultOn: true, SourcePath: "claudetool/experience.go"},
 	{Name: "browser", Summary: "Browser automation (navigate, eval, screenshot, emulate, network, accessibility, profile).", DefaultOn: true, SourcePath: "claudetool/browse/browse.go"},
 	{Name: "read_image", Summary: "Read an image file for the model.", DefaultOn: true, SourcePath: "claudetool/browse/browse.go"},
 }
