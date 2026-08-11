@@ -42,6 +42,7 @@
         @archived="handleConversationArchived"
         @unarchived="handleConversationUnarchived"
         @renamed="handleConversationRenamed"
+        @open-experience="experienceModalOpen = true"
       />
 
       <div class="main-content">
@@ -210,6 +211,13 @@
         "
       />
 
+      <ExperienceModal
+        :is-open="experienceModalOpen"
+        :cwd="finderDir"
+        :conversation-id="currentConversationId"
+        @close="experienceModalOpen = false"
+      />
+
       <FeatureFlagsModal
         :is-open="featureFlagsModalOpen"
         @close="
@@ -270,6 +278,7 @@ import IntegrationsModal from "./components/IntegrationsModal.vue";
 import NotificationsModal from "./components/NotificationsModal.vue";
 import FeatureFlagsModal from "./components/FeatureFlagsModal.vue";
 import FaviconEmojiPicker from "./components/FaviconEmojiPicker.vue";
+import ExperienceModal from "./components/ExperienceModal.vue";
 import FileFinderModal from "./components/FileFinderModal.vue";
 import EditableFileModal from "./components/EditableFileModal.vue";
 import Button from "primevue/button";
@@ -386,6 +395,7 @@ const integrationsModalOpen = ref(false);
 const notificationsModalOpen = ref(false);
 const featureFlagsModalOpen = ref(false);
 const faviconEmojiPickerOpen = ref(false);
+const experienceModalOpen = ref(false);
 // Fuzzy file finder (Cmd/Ctrl+P) + the generic editor it opens.
 const fileFinderOpen = ref(false);
 const editorFilePath = ref<string | null>(null);
