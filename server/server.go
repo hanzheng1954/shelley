@@ -521,6 +521,7 @@ func NewServer(database *db.DB, llmManager LLMProvider, toolSetConfig claudetool
 	s.toolSetConfig.ParentMessenger = subagentRunner
 	s.toolSetConfig.DBPath = DBPath
 	s.toolSetConfig.BackgroundJobs = backgroundJobs{server: s}
+	s.toolSetConfig.ExperienceStore = database
 	s.toolSetConfig.MaxSubagentDepth = 1 // Only top-level conversations can spawn subagents
 
 	return s
