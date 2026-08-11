@@ -513,6 +513,12 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/terminals/{id}/kill", s.handleTerminalDelete)
 	mux.HandleFunc("PUT /api/terminals/{id}/scope", s.handleTerminalScope) // Move a terminal between conversation-local and global
 
+	// Durable experience management API.
+	mux.HandleFunc("/api/experience/memories", s.handleExperienceMemories)
+	mux.HandleFunc("/api/experience/memories/{id}", s.handleExperienceMemory)
+	mux.HandleFunc("/api/experience/journal", s.handleExperienceJournal)
+	mux.HandleFunc("/api/experience/dreams", s.handleExperienceDreams)
+
 	// Custom models API
 	mux.Handle("/api/custom-models", http.HandlerFunc(s.handleCustomModels))
 	mux.Handle("/api/custom-models/", http.HandlerFunc(s.handleCustomModel))
