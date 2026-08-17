@@ -157,19 +157,28 @@ class ApiService {
     return response.json();
   }
 
-  async updateExperienceMemory(cwd: string, memory: Pick<ExperienceMemory, "id" | "kind" | "title" | "content" | "confidence">): Promise<void> {
+  async updateExperienceMemory(
+    cwd: string,
+    memory: Pick<ExperienceMemory, "id" | "kind" | "title" | "content" | "confidence">,
+  ): Promise<void> {
     const params = new URLSearchParams({ cwd });
-    const response = await fetch(`${this.baseUrl}/experience/memories/${encodeURIComponent(memory.id)}?${params}`, {
-      method: "PUT",
-      headers: this.postHeaders,
-      body: JSON.stringify(memory),
-    });
+    const response = await fetch(
+      `${this.baseUrl}/experience/memories/${encodeURIComponent(memory.id)}?${params}`,
+      {
+        method: "PUT",
+        headers: this.postHeaders,
+        body: JSON.stringify(memory),
+      },
+    );
     if (!response.ok) throw await responseError(response, "Failed to update memory");
   }
 
   async deleteExperienceMemory(cwd: string, id: string): Promise<void> {
     const params = new URLSearchParams({ cwd });
-    const response = await fetch(`${this.baseUrl}/experience/memories/${encodeURIComponent(id)}?${params}`, { method: "DELETE" });
+    const response = await fetch(
+      `${this.baseUrl}/experience/memories/${encodeURIComponent(id)}?${params}`,
+      { method: "DELETE" },
+    );
     if (!response.ok) throw await responseError(response, "Failed to delete memory");
   }
 
