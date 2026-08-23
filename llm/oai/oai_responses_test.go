@@ -25,11 +25,17 @@ func TestResponsesServiceBasic(t *testing.T) {
 }
 
 func TestApplyCodexClientCompatibility(t *testing.T) {
-	ctx := llmhttp.WithUserAgent(context.Background(), "codex_cli_rs/0.145.1")
-	req := responsesRequest{Tools: []responsesTool{
-		{Type: "function", Name: "bash"},
-		{Type: "web_search"},
-	}}
+	ctx := llmhttp.WithConversationID(
+		llmhttp.WithUserAgent(context.Background(), "codex_cli_rs/0.145.1"),
+		"conversation-cache-key",
+	)
+	req := responsesRequest{
+		PromptCacheKey: "conversation-cache-key",
+		Tools: []responsesTool{
+			{Type: "function", Name: "bash"},
+			{Type: "web_search"},
+		},
+	}
 	headers := applyCodexClientCompatibility(ctx, &req)
 
 	if got := headers.Get("originator"); got != "codex_cli_rs" {
@@ -38,8 +44,8 @@ func TestApplyCodexClientCompatibility(t *testing.T) {
 	if headers.Get("x-codex-turn-metadata") == "" || headers.Get("session-id") == "" {
 		t.Fatal("missing Codex turn metadata headers")
 	}
-	if req.PromptCacheKey == "" || req.ClientMetadata["session_id"] == "" {
-		t.Fatal("missing Codex request metadata")
+	if req.PromptCacheKey != "conversation-cache-key" || req.ClientMetadata["session_id"] == "" {
+		t.Fatalf("Codex request metadata replaced stable cache key: %#v", req.ClientMetadata)
 	}
 	sessionID, err := uuid.Parse(req.ClientMetadata["session_id"])
 	if err != nil || sessionID.Version() != 7 {
@@ -63,6 +69,30 @@ func TestApplyCodexClientCompatibility(t *testing.T) {
 	}
 	if req.ClientMetadata["x-codex-turn-metadata"] != headers.Get("x-codex-turn-metadata") {
 		t.Fatal("body and header turn metadata differ")
+	}
+
+	second := responsesRequest{PromptCacheKey: "conversation-cache-key"}
+	secondHeaders := applyCodexClientCompatibility(ctx, &second)
+	if second.PromptCacheKey != req.PromptCacheKey {
+		t.Fatalf("prompt cache key changed across turns: %q -> %q", req.PromptCacheKey, second.PromptCacheKey)
+	}
+	if second.ClientMetadata["session_id"] != req.ClientMetadata["session_id"] ||
+		secondHeaders.Get("session-id") != headers.Get("session-id") ||
+		secondHeaders.Get("thread-id") != headers.Get("thread-id") {
+		t.Fatal("Codex session/thread identity changed across turns")
+	}
+	if second.ClientMetadata["turn_id"] == req.ClientMetadata["turn_id"] {
+		t.Fatal("Codex turn ID must change across turns")
+	}
+
+	otherCtx := llmhttp.WithConversationID(
+		llmhttp.WithUserAgent(context.Background(), "codex_cli_rs/0.145.1"),
+		"other-conversation-cache-key",
+	)
+	other := responsesRequest{PromptCacheKey: "other-conversation-cache-key"}
+	applyCodexClientCompatibility(otherCtx, &other)
+	if other.ClientMetadata["session_id"] == req.ClientMetadata["session_id"] {
+		t.Fatal("different conversations must not share Codex session identity")
 	}
 }
 
