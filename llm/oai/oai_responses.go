@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -167,7 +168,12 @@ type codexTurnMetadata struct {
 	TurnStartedAtUnixMS int64  `json:"turn_started_at_unix_ms"`
 }
 
-var codexInstallationID = uuid.NewString()
+var (
+	codexInstallationID = uuid.NewString()
+	// Codex keeps session/thread identity stable across turns. The provider uses
+	// it for routing affinity, while prompt_cache_key selects the cache namespace.
+	codexConversationSessions sync.Map // map[Shelley conversation ID]Codex UUIDv7
+)
 
 func boolPointer(value bool) *bool { return &value }
 
@@ -179,6 +185,18 @@ func newCodexTurnID() string {
 	return id.String()
 }
 
+func codexSessionID(ctx context.Context) string {
+	conversationID := llmhttp.ConversationIDFromContext(ctx)
+	if conversationID == "" {
+		return newCodexTurnID()
+	}
+	if id, ok := codexConversationSessions.Load(conversationID); ok {
+		return id.(string)
+	}
+	id, _ := codexConversationSessions.LoadOrStore(conversationID, newCodexTurnID())
+	return id.(string)
+}
+
 // applyCodexClientCompatibility adds the metadata required by providers that
 // restrict an account to official Codex clients. A codex_* User-Agent opts in.
 func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) http.Header {
@@ -188,7 +206,7 @@ func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) h
 	}
 
 	originator := strings.SplitN(userAgent, "/", 2)[0]
-	sessionID := newCodexTurnID()
+	sessionID := codexSessionID(ctx)
 	threadID := sessionID
 	turnID := newCodexTurnID()
 	windowID := sessionID + ":0"
@@ -200,7 +218,12 @@ func applyCodexClientCompatibility(ctx context.Context, req *responsesRequest) h
 	metadataJSON, _ := json.Marshal(metadata)
 	metadataString := string(metadataJSON)
 
-	req.PromptCacheKey = sessionID
+	// Upstream Shelley sets this to its stable conversation ID. Preserve that
+	// value instead of replacing it with per-turn metadata; calls without a
+	// conversation still receive a valid fallback namespace.
+	if req.PromptCacheKey == "" {
+		req.PromptCacheKey = cmp.Or(llmhttp.ConversationIDFromContext(ctx), sessionID)
+	}
 	// Match Codex's Responses Lite request shape. The Lite route is stricter
 	// than the general Responses API and otherwise returns an opaque 502.
 	req.ParallelToolCalls = boolPointer(false)
