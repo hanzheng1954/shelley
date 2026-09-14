@@ -123,7 +123,7 @@ func TestTransportUsesUserAgentOverride(t *testing.T) {
 	}))
 	defer server.Close()
 
-	ctx := WithUserAgent(context.Background(), "codex_cli_rs/0.144.0")
+	ctx := WithUserAgent(t.Context(), "codex_cli_rs/0.144.0")
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server.URL, nil)
 	if err != nil {
 		t.Fatal(err)

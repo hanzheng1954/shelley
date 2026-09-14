@@ -570,9 +570,10 @@ func TestCustomModelUserAgentCRUD(t *testing.T) {
 	}
 
 	empty := ""
+	maxTokens := created.MaxTokens
 	update := UpdateModelRequest{
 		DisplayName: created.DisplayName, ProviderType: created.ProviderType,
-		Endpoint: created.Endpoint, ModelName: created.ModelName, MaxTokens: created.MaxTokens,
+		Endpoint: created.Endpoint, ModelName: created.ModelName, MaxTokens: &maxTokens,
 		UserAgent: &empty,
 	}
 	updateBody, err := json.Marshal(update)
