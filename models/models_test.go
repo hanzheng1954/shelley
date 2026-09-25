@@ -762,9 +762,13 @@ func TestManagerLoadsCustomReasoningReplayOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrapped, ok := service.(*reasoningService)
+	logged, ok := service.(*loggingService)
 	if !ok {
 		t.Fatalf("service type = %T", service)
+	}
+	wrapped, ok := logged.service.(*reasoningService)
+	if !ok {
+		t.Fatalf("logged service type = %T", logged.service)
 	}
 	chat, ok := wrapped.Service.(*oai.Service)
 	if !ok {
