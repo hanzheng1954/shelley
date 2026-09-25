@@ -40,9 +40,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import type { LLMContent } from "../../../types";
-import { useToolExpanded } from "../../composables/toolDetail";
 import { useI18n } from "../../composables/i18n";
 
 const props = defineProps<{
@@ -53,7 +52,7 @@ const props = defineProps<{
   hasError?: boolean;
   executionTime?: string;
 }>();
-const isExpanded = useToolExpanded();
+const isExpanded = ref(false);
 const { t } = useI18n();
 const isComplete = computed(() => !props.isRunning && props.toolResult !== undefined);
 const input = computed(() =>
