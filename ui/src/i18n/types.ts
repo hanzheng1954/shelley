@@ -158,7 +158,6 @@ export interface TranslationKeys {
   dreamDescription: string;
   dreamAgentPrompt: string;
   runDream: string;
-  refresh: string;
   dreamRequested: string;
   noDreamRuns: string;
   memories: string;
