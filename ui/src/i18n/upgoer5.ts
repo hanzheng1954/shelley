@@ -159,7 +159,6 @@ export const upgoer5: TranslationKeys = {
   dreamAgentPrompt:
     "Look over the finished and checked work in this talk, then think it over. Remember only things that can help later and have clear support; remembering nothing is fine.",
   runDream: "Think it over",
-  refresh: "Look again",
   dreamRequested: "The helper was asked to think it over. Look again after it is done.",
   noDreamRuns: "This work has not been thought over yet.",
   memories: "things remembered",

@@ -162,7 +162,6 @@ export const fr: TranslationKeys = {
   dreamAgentPrompt:
     "Examine le travail terminé et vérifié dans cette conversation, puis exécute Dream. Enregistre uniquement les enseignements réutilisables et étayés par des sources ; il est acceptable de ne rien enregistrer.",
   runDream: "Exécuter Dream",
-  refresh: "Actualiser",
   dreamRequested: "Dream demandé. Actualisez cet onglet lorsque l’agent a terminé.",
   noDreamRuns: "Aucun Dream pour ce projet.",
   memories: "mémoires",

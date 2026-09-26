@@ -158,7 +158,6 @@ export const zhTW: TranslationKeys = {
   dreamAgentPrompt:
     "複盤此對話中已完成並驗證的工作，現在執行 Dream。只儲存可重用且有來源依據的專案經驗；若沒有值得儲存的內容，也可以不儲存。",
   runDream: "執行 Dream",
-  refresh: "重新整理",
   dreamRequested: "已要求執行 Dream。Agent 完成後請重新整理此分頁。",
   noDreamRuns: "此專案尚無 Dream 記錄。",
   memories: "則記憶",

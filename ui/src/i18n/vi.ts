@@ -159,7 +159,6 @@ export const vi: TranslationKeys = {
   dreamAgentPrompt:
     "Xem lại công việc đã hoàn thành và xác minh trong cuộc trò chuyện này rồi chạy Dream. Chỉ lưu các bài học dự án có nguồn, có thể tái sử dụng; không lưu gì cũng được.",
   runDream: "Chạy Dream",
-  refresh: "Làm mới",
   dreamRequested: "Đã yêu cầu Dream. Hãy làm mới thẻ này sau khi tác nhân hoàn tất.",
   noDreamRuns: "Dự án này chưa có lần chạy Dream.",
   memories: "ghi nhớ",

@@ -159,7 +159,6 @@ export const ja: TranslationKeys = {
   dreamAgentPrompt:
     "この会話で完了・検証済みの作業を振り返り、Dream を実行してください。根拠があり再利用可能なプロジェクトの教訓だけを保存し、該当するものがなければ保存しなくても構いません。",
   runDream: "Dream を実行",
-  refresh: "更新",
   dreamRequested: "Dream をリクエストしました。エージェントの完了後にこのタブを更新してください。",
   noDreamRuns: "このプロジェクトには Dream の履歴がありません。",
   memories: "件のメモリ",

@@ -161,7 +161,6 @@ export const es: TranslationKeys = {
   dreamAgentPrompt:
     "Revisa el trabajo completado y verificado en esta conversación y ejecuta Dream. Guarda solo lecciones reutilizables y respaldadas por fuentes; es válido no guardar ninguna.",
   runDream: "Ejecutar Dream",
-  refresh: "Actualizar",
   dreamRequested: "Dream solicitado. Actualiza esta pestaña cuando termine el agente.",
   noDreamRuns: "Aún no hay ejecuciones de Dream para este proyecto.",
   memories: "memorias",

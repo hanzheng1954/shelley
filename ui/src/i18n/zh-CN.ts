@@ -158,7 +158,6 @@ export const zhCN: TranslationKeys = {
   dreamAgentPrompt:
     "复盘此对话中已经完成并验证的工作，现在执行 Dream。只保存可复用且有来源依据的项目经验；如果没有值得保存的内容，也可以不保存。",
   runDream: "执行 Dream",
-  refresh: "刷新",
   dreamRequested: "已请求 Dream。Agent 完成后请刷新此标签页。",
   noDreamRuns: "此项目还没有 Dream 记录。",
   memories: "条记忆",

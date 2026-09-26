@@ -159,7 +159,6 @@ export const en: TranslationKeys = {
   dreamAgentPrompt:
     "Review the completed, verified work in this conversation and run Dream now. Save only reusable, source-supported project lessons; it is valid to save none.",
   runDream: "Run Dream",
-  refresh: "Refresh",
   dreamRequested: "Dream requested. Refresh this tab after the agent finishes.",
   noDreamRuns: "No Dream runs for this project yet.",
   memories: "memories",
