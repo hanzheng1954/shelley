@@ -96,3 +96,24 @@ func TestExperienceManagementAPI(t *testing.T) {
 		t.Fatalf("delete memory: %d %s", deleted.Code, deleted.Body.String())
 	}
 }
+
+// TestExperienceRoutesRejectWrongMethod checks that the route table answers
+// wrong-method requests on the experience API with 405 and an Allow header.
+func TestExperienceRoutesRejectWrongMethod(t *testing.T) {
+	t.Parallel()
+	h := NewTestHarness(t)
+	mux := http.NewServeMux()
+	h.server.RegisterRoutes(mux)
+	for _, tc := range []struct{ method, path, allow string }{
+		{http.MethodDelete, "/api/experience/memories", "GET, HEAD, POST"},
+		{http.MethodGet, "/api/experience/memories/m1", "DELETE, PUT"},
+		{http.MethodPut, "/api/experience/journal", "GET, HEAD, POST"},
+		{http.MethodPost, "/api/experience/dreams", "GET, HEAD"},
+	} {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != tc.allow {
+			t.Errorf("%s %s: got %d Allow=%q, want 405 Allow=%q", tc.method, tc.path, w.Code, w.Header().Get("Allow"), tc.allow)
+		}
+	}
+}

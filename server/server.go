@@ -600,10 +600,13 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	api.HandleFunc("PUT /api/terminals/{id}/scope", s.handleTerminalScope) // Move a terminal between conversation-local and global
 
 	// Durable experience management API.
-	mux.HandleFunc("/api/experience/memories", s.handleExperienceMemories)
-	mux.HandleFunc("/api/experience/memories/{id}", s.handleExperienceMemory)
-	mux.HandleFunc("/api/experience/journal", s.handleExperienceJournal)
-	mux.HandleFunc("/api/experience/dreams", s.handleExperienceDreams)
+	api.HandleFunc("GET /api/experience/memories", s.handleListExperienceMemories)
+	api.HandleFunc("POST /api/experience/memories", s.handleCreateExperienceMemory)
+	api.HandleFunc("PUT /api/experience/memories/{id}", s.handleUpdateExperienceMemory)
+	api.HandleFunc("DELETE /api/experience/memories/{id}", s.handleDeleteExperienceMemory)
+	api.HandleFunc("GET /api/experience/journal", s.handleListExperienceJournal)
+	api.HandleFunc("POST /api/experience/journal", s.handleCreateExperienceCheckpoint)
+	api.HandleFunc("GET /api/experience/dreams", s.handleListExperienceDreams)
 
 	// Custom models API
 	api.HandleFunc("GET /api/custom-models", s.handleListModels)
